@@ -12,9 +12,14 @@ services:
       - db_data:/var/lib/postgresql/data
     networks:
       - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d file_registry"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   minio:
-    image: minio/minio:RELEASE.2024-07-13T01-03-43Z
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minio
@@ -43,10 +48,14 @@ services:
       context: ./backend
       dockerfile: ../Dockerfile.backend
     depends_on:
-      - db
-      - blockchain
-      - minio
+      db:
+        condition: service_healthy
+      blockchain:
+        condition: service_started
+      minio:
+        condition: service_started
     environment:
+      - PYTHONPATH=/app
       - SECRET_KEY=CHANGE_ME_SECRET
       - POSTGRES_SERVER=db
       - POSTGRES_USER=app
@@ -61,6 +70,7 @@ services:
       - CONTRACT_OWNER_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
       - CHAIN_ID=31337
       - BACKEND_CORS_ORIGINS=["http://localhost:5173"]
+    
     volumes:
       - backend_files:/data/files
       - chain_shared:/shared

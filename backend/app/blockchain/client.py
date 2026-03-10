@@ -40,7 +40,13 @@ class BlockchainClient:
             )
 
         self.w3 = Web3(Web3.HTTPProvider(str(settings.WEB3_PROVIDER_URL)))
-        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+        # Compatible with both web3 6.x and 7.x
+        try:
+            from web3.middleware import ExtraDataToPOAMiddleware
+            self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+        except ImportError:
+            self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
         abi: list[dict[str, Any]] = []
         # Prefer shared ABI file from dockerized deploy
@@ -114,4 +120,3 @@ class BlockchainClient:
         for a in actions:
             out.append({"action_type": a[0], "timestamp": a[1], "actor": a[2], "details": a[3]})
         return out
-
