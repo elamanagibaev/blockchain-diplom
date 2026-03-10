@@ -1,0 +1,12 @@
+.venv/
+**/__pycache__/
+*.pyc
+backend/app.log
+
+frontend/node_modules/
+frontend/dist/
+
+blockchain/node_modules/
+blockchain/artifacts/
+blockchain/cache/
+
