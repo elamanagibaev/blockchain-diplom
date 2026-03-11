@@ -65,6 +65,12 @@ export const Layout: React.FC = () => {
             >
               Профиль
             </Link>
+            <Link
+              to="/audit"
+              className={`app-nav-link ${isActive("/audit") ? "app-nav-link--active" : ""}`}
+            >
+              Журнал
+            </Link>
             {user?.role === "admin" && (
               <Link
                 to="/admin"

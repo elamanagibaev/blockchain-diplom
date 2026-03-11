@@ -122,6 +122,10 @@ class BlockchainClient:
             "exists": exists,
         }
 
+    def hash_exists(self, file_hash: str) -> bool:
+        """Check if file hash is already registered in contract."""
+        return self.contract.functions.hashExists(file_hash).call()
+
     def get_actions(self, object_id: str) -> list[dict[str, Any]]:
         actions = self.contract.functions.getActions(object_id).call()
         out: list[dict[str, Any]] = []

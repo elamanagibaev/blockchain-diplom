@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.auth import MeResponse, Token
 from app.schemas.user import UserCreate, UserRead
 from app.services.auth_service import AuthService
+from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,7 +23,11 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
     user = AuthService(db).authenticate(form_data.username, form_data.password)
     if not user:
+        AuditService(db).log_login_failed(form_data.username)
+        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    AuditService(db).log_login(user)
+    db.commit()
     token, expires_in = AuthService(db).create_login_token(user)
     return Token(access_token=token, expires_in=expires_in)
 

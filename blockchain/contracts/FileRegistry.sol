@@ -54,6 +54,7 @@ contract FileRegistry {
         string memory status
     ) public {
         require(!objects[objectId].exists, "Object already exists");
+        require(!hashes[fileHash], "File hash already registered");
         require(owner != address(0), "Owner must be set");
 
         objects[objectId] = DigitalObject({

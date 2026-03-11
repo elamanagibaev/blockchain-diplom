@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile, Body
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -99,7 +99,6 @@ def list_global(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Global patent/document registry - all documents from all users."""
     objs = FileService(db).list_objects_global(q_search=q, status_filter=status)
     return [_to_read(o) for o in objs]
 
@@ -143,6 +142,17 @@ def get_file(
 ):
     obj = FileService(db).get_object(current_user, obj_id)
     return _to_read(obj)
+
+
+@router.post("/{obj_id}/transfer")
+def transfer_document(
+    obj_id: UUID,
+    to_wallet_address: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    obj = FileService(db).transfer_document(current_user, obj_id, to_wallet_address)
+    return {"message": "Документ передан", "object_id": str(obj.id), "new_owner_wallet": obj.owner_wallet_address}
 
 
 @router.get("/{obj_id}/download")

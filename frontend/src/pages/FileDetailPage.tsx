@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { ActionHistoryTimeline, ActionItem } from "../components/ActionHistoryTimeline";
 import { PageHeader } from "../components/PageHeader";
@@ -33,8 +34,12 @@ export const FileDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chainActions, setChainActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [transferWallet, setTransferWallet] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const { notify } = useNotification();
+  const { user } = useAuth();
 
   const load = async () => {
     if (!id) return;
@@ -75,14 +80,32 @@ export const FileDetailPage: React.FC = () => {
   const registerOnChain = async () => {
     if (!id) return;
     setError(null);
+    setRegistering(true);
     try {
       await api.post(`/blockchain/register/${id}`);
       await load();
       notify("success", "Документ зарегистрирован в блокчейне.");
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Ошибка регистрации в блокчейне";
-      setError(msg);
       notify("error", typeof msg === "string" ? msg : "Ошибка регистрации");
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const transferDocument = async () => {
+    if (!id || !transferWallet.trim()) return;
+    setTransferring(true);
+    try {
+      await api.post(`/files/${id}/transfer`, { to_wallet_address: transferWallet.trim() });
+      setTransferWallet("");
+      await load();
+      notify("success", "Документ передан.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || "Ошибка передачи";
+      notify("error", typeof msg === "string" ? msg : "Ошибка передачи");
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -113,6 +136,7 @@ export const FileDetailPage: React.FC = () => {
   }
 
   const onChainRegistered = Boolean(data.blockchain_tx_hash);
+  const isOwner = user?.id === data.owner_id || user?.role === "admin";
 
   return (
     <div className="page">
@@ -121,9 +145,15 @@ export const FileDetailPage: React.FC = () => {
         subtitle={data.title || data.file_name}
         backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
-          <button className="btn btn-primary" onClick={() => void registerOnChain()}>
-            {onChainRegistered ? "Повторно зарегистрировать on-chain" : "Зарегистрировать в блокчейне"}
-          </button>
+          onChainRegistered ? null : (
+            <button
+              className="btn btn-primary"
+              onClick={() => void registerOnChain()}
+              disabled={registering}
+            >
+              {registering ? "Регистрация…" : "Зарегистрировать в блокчейне"}
+            </button>
+          )
         }
       />
 
@@ -235,6 +265,32 @@ export const FileDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {isOwner && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Передать документ</h3>
+          <div className="muted" style={{ fontSize: 12 }}>
+            Введите wallet address получателя. Пользователь с таким wallet должен быть зарегистрирован.
+          </div>
+          <div className="row" style={{ marginTop: 12, gap: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <input
+                className="input"
+                placeholder="0x..."
+                value={transferWallet}
+                onChange={(e) => setTransferWallet(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-outline"
+              onClick={() => void transferDocument()}
+              disabled={transferring || !transferWallet.trim()}
+            >
+              {transferring ? "Передача…" : "Передать"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>История действий (off-chain аудит)</h3>

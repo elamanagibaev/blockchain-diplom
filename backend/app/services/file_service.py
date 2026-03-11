@@ -16,6 +16,7 @@ from app.storage.local_storage import LocalStorageBackend
 from app.storage.minio_storage import MinioStorageBackend
 from app.utils.hashing import sha256_file
 from app.models.verification_log import VerificationLog
+from app.services.audit_service import AuditService
 
 settings = get_settings()
 
@@ -69,14 +70,13 @@ class FileService:
 
         sha = sha256_file(BytesIO(raw))
 
-        # Optional business rule: prevent duplicates by hash for same owner
-        existing = (
-            self.db.query(DigitalObject)
-            .filter(DigitalObject.owner_id == user.id, DigitalObject.sha256_hash == sha)
-            .first()
-        )
+        # Global uniqueness: file hash must be unique across all users
+        existing = self.db.query(DigitalObject).filter(DigitalObject.sha256_hash == sha).first()
         if existing:
-            raise HTTPException(status_code=400, detail="This file hash is already registered by you")
+            raise HTTPException(
+                status_code=400,
+                detail="Документ с таким хэшем уже зарегистрирован в системе. Один файл не может принадлежать разным пользователям.",
+            )
 
         storage_key = self.storage.save(BytesIO(raw), filename)
 
@@ -108,6 +108,7 @@ class FileService:
                 details="Initial registration (off-chain)",
             )
         )
+        AuditService(self.db).log_document_upload(user, obj.id, sha)
         self.db.commit()
         self.db.refresh(obj)
         return obj
@@ -178,6 +179,56 @@ class FileService:
     def get_download_url(self, user: User, obj_id: UUID) -> str:
         obj = self.get_object(user, obj_id, require_owner=True)  # only owner can download
         return self.storage.get_url(obj.storage_key)
+
+    def transfer_document(
+        self, user: User, obj_id: UUID, to_wallet_address: str
+    ) -> DigitalObject:
+        """Передать документ другому пользователю по wallet address."""
+        obj = self.get_object(user, obj_id, require_owner=True)
+        if not obj:
+            raise HTTPException(status_code=404, detail="Object not found")
+
+        to_wallet = to_wallet_address.strip()
+        if not to_wallet.startswith("0x") or len(to_wallet) != 42:
+            raise HTTPException(status_code=400, detail="Некорректный wallet address")
+
+        new_owner = self.db.query(User).filter(User.wallet_address == to_wallet).first()
+        if not new_owner:
+            raise HTTPException(
+                status_code=404,
+                detail="Пользователь с таким wallet address не найден в системе",
+            )
+        if new_owner.id == user.id:
+            raise HTTPException(status_code=400, detail="Нельзя передать документ самому себе")
+
+        from_wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
+        obj.owner_id = new_owner.id
+        obj.owner_wallet_address = to_wallet
+        obj.status = "TRANSFERRED"
+
+        if obj.blockchain_object_id:
+            try:
+                from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
+                client = BlockchainClient()
+                client.transfer_ownership(str(obj.id), to_wallet)
+            except BlockchainNotConfiguredError:
+                pass
+            except Exception:
+                self.db.rollback()
+                raise HTTPException(status_code=500, detail="Ошибка обновления ownership в блокчейне")
+
+        self.db.add(
+            ActionHistory(
+                digital_object_id=obj.id,
+                action_type="TRANSFER",
+                performed_by_id=user.id,
+                details=f"Transferred from {from_wallet} to {to_wallet}",
+            )
+        )
+        AuditService(self.db).log_transfer(user, obj_id, from_wallet or "", to_wallet, new_owner.id)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
 
     def get_recent_activity(self, user: User, limit: int = 10) -> list[dict]:
         """Return recent actions across user's documents for dashboard."""
