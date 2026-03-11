@@ -7,32 +7,43 @@ export type BlockchainInfoCardProps = {
 
 export const BlockchainInfoCard: React.FC<BlockchainInfoCardProps> = ({ txHash, objectId }) => {
   if (!txHash && !objectId) {
-    return <div className="muted">Документ ещё не зарегистрирован на блокчейне.</div>;
+    return (
+      <div className="blockchain-empty">
+        <span className="muted">Документ ещё не зарегистрирован в блокчейне.</span>
+        <span className="muted" style={{ fontSize: 11, marginTop: 4, display: "block" }}>
+          Нажмите «Зарегистрировать в блокчейне» выше, чтобы зафиксировать хэш в контракте FileRegistry.
+        </span>
+      </div>
+    );
   }
   return (
-    <div className="grid" style={{ gap: 8 }}>
+    <div className="blockchain-proof">
+      {objectId && (
+        <div>
+          <span className="muted">ID объекта в реестре:</span> <code>{objectId}</code>
+        </div>
+      )}
       {txHash && (
         <div>
           <span className="muted">Tx hash:</span> <code>{txHash}</code>
-        </div>
-      )}
-      {objectId && (
-        <div>
-          <span className="muted">Object ID:</span> <code>{objectId}</code>
+          <button
+            className="btn btn-outline btn-sm"
+            style={{ marginLeft: 8 }}
+            onClick={() => navigator.clipboard.writeText(txHash)}
+          >
+            Копировать
+          </button>
         </div>
       )}
       {txHash && (
-        <div>
-          <a
-            href={`https://explorer.local/tx/${txHash}`}
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-outline"
-            style={{ fontSize: 12 }}
-          >
-            View on explorer
-          </a>
-        </div>
+        <a
+          href={`https://explorer.local/tx/${txHash}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn-outline btn-sm"
+        >
+          Открыть в обозревателе
+        </a>
       )}
     </div>
   );

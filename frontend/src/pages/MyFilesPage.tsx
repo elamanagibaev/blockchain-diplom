@@ -1,27 +1,34 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { FileTable, FileRow } from "../components/FileTable";
 import { Spinner } from "../components/Spinner";
+import { useNotification } from "../context/NotificationContext";
 
 export const MyFilesPage: React.FC = () => {
+  const { notify } = useNotification();
   const [items, setItems] = useState<FileRow[]>([]);
   const [filtered, setFiltered] = useState<FileRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [loadingRegister, setLoadingRegister] = useState<string | null>(null);
 
   const load = async (q: string = "", status: string = "") => {
     setError(null);
+    setLoading(true);
     try {
       const params: any = {};
       if (q) params.q = q;
       if (status && status !== "ALL") params.status = status;
-      const res = await api.get("/files", { params });
+      const res = await api.get<FileRow[]>("/files", { params });
       setItems(res.data);
       setFiltered(res.data);
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Ошибка загрузки списка");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,9 +40,12 @@ export const MyFilesPage: React.FC = () => {
     setLoadingRegister(id);
     try {
       await api.post(`/blockchain/register/${id}`);
-      await load(search);
+      await load(search, statusFilter);
+      notify("success", "Документ зарегистрирован в блокчейне.");
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Ошибка регистрации");
+      const msg = err?.response?.data?.detail || "Ошибка регистрации";
+      setError(msg);
+      notify("error", typeof msg === "string" ? msg : "Ошибка регистрации");
     } finally {
       setLoadingRegister(null);
     }
@@ -46,41 +56,74 @@ export const MyFilesPage: React.FC = () => {
   }, [search, statusFilter]);
 
   return (
-    <div className="grid">
+    <div className="page">
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div>
-            <h2>Мои документы</h2>
-            <div className="muted">Список ваших загруженных медицинских записей.</div>
+            <h2 style={{ margin: 0, fontSize: 22 }}>Мои медицинские документы</h2>
+            <div className="muted">
+              Все файлы, которые вы загрузили в систему. Используйте фильтры, чтобы анализировать статус
+              регистрации и целостности.
+            </div>
           </div>
-          <button className="btn btn-muted" onClick={() => void load()}>
+          <button className="btn btn-muted" onClick={() => void load(search, statusFilter)}>
             Обновить
           </button>
         </div>
-        {error && <div className="bad" style={{ marginTop: 10 }}>{error}</div>}
-        <div className="row" style={{ marginTop: 12, gap: 12 }}>
-          <input
-            className="input"
-            placeholder="Поиск по имени или хэшу..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            style={{ maxWidth: 300 }}
-          />
-          <select
-            className="input"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ maxWidth: 200 }}
-          >
-            <option value="ALL">Все статусы</option>
-            <option value="REGISTERED">Registered</option>
-            <option value="REGISTERED_ON_CHAIN">On-chain</option>
-          </select>
+        {error && (
+          <div className="bad" style={{ marginTop: 10 }}>
+            {error}
+          </div>
+        )}
+        <div className="row" style={{ marginTop: 12, gap: 12, alignItems: "flex-end" }}>
+          <div style={{ maxWidth: 320, width: "100%" }}>
+            <div className="label">Поиск</div>
+            <input
+              className="input"
+              placeholder="Поиск по имени файла или хэшу..."
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
+          <div style={{ maxWidth: 220, width: "100%" }}>
+            <div className="label">Статус</div>
+            <select
+              className="input"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="ALL">Все статусы</option>
+              <option value="REGISTERED">Uploaded / Registered</option>
+              <option value="REGISTERED_ON_CHAIN">Registered on-chain</option>
+            </select>
+          </div>
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Статус <code>REGISTERED</code> означает, что файл зарегистрирован в off-chain реестре. Статус{" "}
+          <code>REGISTERED_ON_CHAIN</code> показывает, что для объекта создана запись в блокчейн-контракте
+          <code>FileRegistry</code>.
         </div>
       </div>
 
       <div className="card">
-        <FileTable items={filtered} onRegister={onRegister} loadingId={loadingRegister} />
+        {loading ? (
+          <div className="text-center" style={{ padding: "16px 0" }}>
+            <Spinner size={28} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📁</div>
+            <div className="empty-state-title">Нет документов</div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              Загрузите медицинский документ, чтобы начать работу с платформой.
+            </div>
+            <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
+              Загрузить документ
+            </Link>
+          </div>
+        ) : (
+          <FileTable items={filtered} onRegister={onRegister} loadingId={loadingRegister} />
+        )}
       </div>
     </div>
   );

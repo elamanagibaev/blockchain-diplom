@@ -69,22 +69,14 @@ const NotificationItem: React.FC<{
     }
   }, [notification.duration, onClose]);
 
-  const bgColor = {
-    success: "var(--color-success)",
-    error: "var(--color-danger)",
-    warning: "var(--color-warning)",
-    info: "var(--color-info)",
-  }[notification.type];
-
   return (
     <div
       className="notification"
+      data-type={notification.type}
       style={{
-        backgroundColor: bgColor,
         color: "#fff",
         padding: "12px 16px",
-        borderRadius: "4px",
-        marginBottom: "8px",
+        borderRadius: "8px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",

@@ -44,3 +44,16 @@ class Metrics(BaseModel):
     verified: int
     invalid: int
 
+
+class RecentActivityItem(BaseModel):
+    id: UUID
+    action_type: str
+    performed_at: datetime
+    file_name: str
+    object_id: UUID
+    details: str | None = None
+
+
+class RecentActivityResponse(BaseModel):
+    actions: list[RecentActivityItem]
+

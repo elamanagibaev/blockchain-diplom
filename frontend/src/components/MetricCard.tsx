@@ -9,11 +9,11 @@ export type MetricCardProps = {
 
 export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, color }) => {
   return (
-    <div className="card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      {icon && <div>{icon}</div>}
-      <div>
-        <div style={{ fontSize: 12, color: "var(--color-muted)", textTransform: "uppercase" }}>{title}</div>
-        <div style={{ fontSize: 24, fontWeight: 600, color: color || "var(--color-text)" }}>{value}</div>
+    <div className="metric-card">
+      {icon && <div className="metric-card-icon">{icon}</div>}
+      <div className="metric-card-content">
+        <div className="metric-card-label">{title}</div>
+        <div className="metric-card-value" style={{ color: color || "var(--color-text)" }}>{value}</div>
       </div>
     </div>
   );

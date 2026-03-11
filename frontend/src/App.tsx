@@ -1,5 +1,5 @@
 import React from "react";
-import { useRoutes } from "react-router-dom";
+import { Link, useRoutes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
@@ -10,6 +10,14 @@ import { MyFilesPage } from "./pages/MyFilesPage";
 import { FileDetailPage } from "./pages/FileDetailPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { AdminPage } from "./pages/AdminPage";
+
+const NotFoundPage: React.FC = () => (
+  <div className="page" style={{ textAlign: "center", paddingTop: 48 }}>
+    <h1 style={{ marginBottom: 8 }}>404</h1>
+    <p className="muted">Страница не найдена</p>
+    <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>На главную</Link>
+  </div>
+);
 
 export const App: React.FC = () => {
   const element = useRoutes([
@@ -30,7 +38,8 @@ export const App: React.FC = () => {
       ]
     },
     { path: "/login", element: <LoginPage /> },
-    { path: "/register", element: <RegisterPage /> }
+    { path: "/register", element: <RegisterPage /> },
+    { path: "*", element: <NotFoundPage /> }
   ]);
 
   return element;

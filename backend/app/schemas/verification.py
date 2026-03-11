@@ -13,4 +13,6 @@ class FileVerificationResult(BaseModel):
     description: str | None
     transaction_hash: str | None
     integrity_status: str
+    sha256_hash: str | None = None  # computed or provided hash used for verification
+    sha256_stored: str | None = None  # hash stored in registry (when found)
 

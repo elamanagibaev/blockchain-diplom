@@ -100,6 +100,8 @@ npm run dev
 - **Files**
   - `POST /api/files/upload`
   - `GET /api/files`
+  - `GET /api/files/activity/recent`
+  - `GET /api/files/metrics`
   - `GET /api/files/{id}`
   - `GET /api/files/{id}/history`
 - **Verification**
@@ -114,6 +116,12 @@ npm run dev
   - `GET /api/health`
 
 Подробности: `docs/api.md`
+
+---
+
+## Сценарий защиты
+
+Подробный пошаговый сценарий для демонстрации на защите: [docs/SCENARIO_DEFENSE.md](docs/SCENARIO_DEFENSE.md)
 
 ---
 
@@ -137,6 +145,28 @@ python -m app.scripts.create_admin
 ```
 
 По умолчанию будет создан аккаунт `admin@example.com` с паролем `admin`.
+
+### Демо-данные для защиты
+
+**При запуске через Docker** (рекомендуется):
+
+```bash
+make seed
+# или
+docker compose run --rm backend python -m app.scripts.seed_demo
+```
+
+**При локальном запуске** (из каталога `backend`):
+
+```bash
+cd backend
+python -m app.scripts.seed_demo
+```
+
+Создаются пользователи и демо-документы (анализы, выписки, направления):
+- `admin@example.com` / `admin`
+- `doctor@clinic.ru` / `doctor123`
+- `patient@example.com` / `patient123`
 
 Вы также можете регистрировать пользователей через веб-интерфейс или `POST /api/auth/register`.
 

@@ -12,6 +12,8 @@ from app.schemas.files import (
     DigitalObjectRead,
     DigitalObjectWithHistory,
     Metrics,
+    RecentActivityItem,
+    RecentActivityResponse,
 )
 from app.services.file_service import FileService
 
@@ -70,6 +72,28 @@ def list_files(
         )
         for o in objs
     ]
+
+
+@router.get("/activity/recent", response_model=RecentActivityResponse)
+def recent_activity(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    actions = FileService(db).get_recent_activity(current_user, limit=limit)
+    return RecentActivityResponse(
+        actions=[
+            RecentActivityItem(
+                id=a["id"],
+                action_type=a["action_type"],
+                performed_at=a["performed_at"],
+                file_name=a["file_name"],
+                object_id=a["object_id"],
+                details=a["details"],
+            )
+            for a in actions
+        ]
+    )
 
 
 @router.get("/metrics", response_model=Metrics)

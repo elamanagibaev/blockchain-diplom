@@ -27,6 +27,8 @@ async def verify_file(
             description=None,
             transaction_hash=None,
             integrity_status="NOT_FOUND",
+            sha256_hash=sha,
+            sha256_stored=None,
         )
     return FileVerificationResult(
         is_verified=True,
@@ -37,6 +39,8 @@ async def verify_file(
         description=obj.description,
         transaction_hash=obj.blockchain_tx_hash,
         integrity_status="OK",
+        sha256_hash=sha,
+        sha256_stored=obj.sha256_hash,
     )
 
 
@@ -57,6 +61,8 @@ def verify_hash(
             description=None,
             transaction_hash=None,
             integrity_status="INVALID_HASH",
+            sha256_hash=sha256,
+            sha256_stored=None,
         )
     
     obj = VerificationService(db).verify_by_hash(sha256)
@@ -70,6 +76,8 @@ def verify_hash(
             description=None,
             transaction_hash=None,
             integrity_status="NOT_FOUND",
+            sha256_hash=sha256,
+            sha256_stored=None,
         )
     return FileVerificationResult(
         is_verified=True,
@@ -80,5 +88,7 @@ def verify_hash(
         description=obj.description,
         transaction_hash=obj.blockchain_tx_hash,
         integrity_status="OK",
+        sha256_hash=sha256,
+        sha256_stored=obj.sha256_hash,
     )
 

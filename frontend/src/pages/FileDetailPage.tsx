@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { useNotification } from "../context/NotificationContext";
 import { ActionHistoryTimeline, ActionItem } from "../components/ActionHistoryTimeline";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { Spinner } from "../components/Spinner";
 import { BlockchainInfoCard } from "../components/BlockchainInfoCard";
-
-import { api as client } from "../api/client";
 
 type Data = {
   id: string;
@@ -27,34 +26,39 @@ export const FileDetailPage: React.FC = () => {
   const { id } = useParams();
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chainActions, setChainActions] = useState<any[]>([]);
+  const [chainActions, setChainActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const { notify } = useNotification();
 
   const load = async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/files/${id}/history`);
-      setData(res.data);
-      // fetch download link
+      const res = await api.get<Data>(`/files/${id}/history`);
+      const dto = res.data as any;
+      setData(dto);
       try {
-        const dres = await api.get(`/files/${id}/download`);
+        const dres = await api.get<{ url: string }>(`/files/${id}/download`);
         setDownloadUrl(dres.data.url);
-      } catch {}
-      // if object has on-chain id, load history
-      if (res.data.blockchain_object_id) {
+      } catch {
+        setDownloadUrl(null);
+      }
+      if (dto.blockchain_object_id) {
         try {
-          const hres = await api.get(`/blockchain/object/${res.data.blockchain_object_id}/history`);
-          // map to generic ActionItem shape
-          const mapped = (hres.data || []).map((a: any) => ({
+          const hres = await api.get<any[]>(`/blockchain/object/${dto.blockchain_object_id}/history`);
+          const mapped: ActionItem[] = (hres.data || []).map((a: any) => ({
             action_type: a.action_type,
             performed_at: a.timestamp,
             details: a.details,
           }));
           setChainActions(mapped);
-        } catch {}
+        } catch {
+          setChainActions([]);
+        }
+      } else {
+        setChainActions([]);
       }
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Ошибка загрузки");
@@ -67,12 +71,13 @@ export const FileDetailPage: React.FC = () => {
     if (!id) return;
     setError(null);
     try {
-      const res = await api.post(`/blockchain/register/${id}`);
+      await api.post(`/blockchain/register/${id}`);
       await load();
-      // optionally show tx
-      setChainActions([]);
+      notify("success", "Документ зарегистрирован в блокчейне.");
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Ошибка регистрации в блокчейне");
+      const msg = err?.response?.data?.detail || "Ошибка регистрации в блокчейне";
+      setError(msg);
+      notify("error", typeof msg === "string" ? msg : "Ошибка регистрации");
     }
   };
 
@@ -82,7 +87,7 @@ export const FileDetailPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="grid">
+      <div className="page">
         <div className="card">
           <PageHeader title="Детали документа" />
           <div className="bad">{error}</div>
@@ -102,64 +107,104 @@ export const FileDetailPage: React.FC = () => {
     );
   }
 
+  const onChainRegistered = Boolean(data.blockchain_tx_hash);
+
   return (
-    <div className="grid">
+    <div className="page">
       <PageHeader
-        title="Документ"
+        title="Медицинский документ"
         subtitle={data.file_name}
+        backTo={{ to: "/files", label: "Мои документы" }}
         actions={
           <button className="btn btn-primary" onClick={() => void registerOnChain()}>
-            Зарегистрировать в блокчейне
+            {onChainRegistered ? "Повторно зарегистрировать on-chain" : "Зарегистрировать в блокчейне"}
           </button>
         }
       />
 
-      <div className="card">
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
+        <div className="card">
+          <div className="label">Метаданные документа</div>
+          <div className="grid" style={{ marginTop: 8, gap: 8 }}>
+            <div>
+              <span className="muted">ID объекта:</span> <code>{data.id}</code>
+            </div>
+            <div>
               <span className="muted">Имя файла:</span> <strong>{data.file_name}</strong>
               {downloadUrl && (
-                <a href={downloadUrl} target="_blank" className="btn btn-outline" style={{ fontSize: 12 }}>
+                <a
+                  href={downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-outline btn-sm"
+                  style={{ marginLeft: 8 }}
+                >
                   Скачать
                 </a>
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span className="muted">SHA-256:</span> <code>{data.sha256_hash}</code>
-              <button
-                className="btn btn-outline"
-                style={{ fontSize: 12 }}
-                onClick={() => navigator.clipboard.writeText(data.sha256_hash)}
-              >
-                Copy
-              </button>
+            <div>
+              <span className="muted">Статус:</span>{" "}
+              <StatusBadge
+                status={
+                  data.status === "REGISTERED" && !data.blockchain_tx_hash
+                    ? "PENDING_ON_CHAIN"
+                    : data.status
+                }
+              />
             </div>
             <div>
               <span className="muted">Создан:</span> {new Date(data.created_at).toLocaleString()}
             </div>
             <div>
-              <span className="muted">Статус:</span>{" "}
-              <StatusBadge status={data.status} />
+              <span className="muted">Владелец (пользователь):</span>{" "}
+              <code>{data.owner_id}</code>
             </div>
             {data.description && (
               <div>
                 <span className="muted">Описание:</span> {data.description}
               </div>
             )}
+            {data.storage_key && (
+              <div>
+                <span className="muted">Storage key (off-chain):</span>{" "}
+                <code>{data.storage_key}</code>
+              </div>
+            )}
           </div>
-          <div>
-            <h4>Blockchain proof</h4>
-          <BlockchainInfoCard
-            txHash={data.blockchain_tx_hash}
-            objectId={data.blockchain_object_id}
-          />
+        </div>
+
+        <div className="card">
+          <div className="label">Blockchain proof и контрольные данные</div>
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span className="muted">SHA-256 хэш:</span> <code>{data.sha256_hash}</code>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => navigator.clipboard.writeText(data.sha256_hash)}
+              >
+                Скопировать
+              </button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Любое изменение файла приведёт к смене SHA-256 хэша и нарушению соответствия с on-chain записью.
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <BlockchainInfoCard
+              txHash={data.blockchain_tx_hash}
+              objectId={data.blockchain_object_id}
+            />
           </div>
         </div>
       </div>
 
       <div className="card">
-        <h3>История действий (off-chain)</h3>
+        <h3 style={{ marginTop: 0 }}>История действий (off-chain аудит)</h3>
+        <div className="muted" style={{ fontSize: 12 }}>
+          Каждое действие с документом (загрузка, изменение статуса, регистрация on-chain) фиксируется в базе
+          данных и может быть предъявлено в качестве аудиторского следа.
+        </div>
         <div style={{ marginTop: 12 }}>
           <ActionHistoryTimeline items={data.actions} />
         </div>
@@ -167,7 +212,11 @@ export const FileDetailPage: React.FC = () => {
 
       {chainActions.length > 0 && (
         <div className="card">
-          <h3>История действий (blockchain)</h3>
+          <h3 style={{ marginTop: 0 }}>История действий (blockchain)</h3>
+          <div className="muted" style={{ fontSize: 12 }}>
+            Эти события получены напрямую из контракта <code>FileRegistry</code> и демонстрируют неизменяемый
+            on-chain след.
+          </div>
           <div style={{ marginTop: 12 }}>
             <ActionHistoryTimeline items={chainActions} />
           </div>

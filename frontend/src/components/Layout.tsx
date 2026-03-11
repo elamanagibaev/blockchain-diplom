@@ -8,7 +8,8 @@ export const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const active = (path: string) => location.pathname === path ? { textDecoration: 'underline' } : undefined;
+  const isActive = (path: string) =>
+    location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
 
   const onLogout = () => {
     logout();
@@ -16,34 +17,99 @@ export const Layout: React.FC = () => {
   };
 
   return (
-    <>
-      <header className="header">
-        <div className="container row" style={{ justifyContent: "space-between" }}>
-          <div className="navlinks" style={{ alignItems: "center" }}>
-            <strong style={{ fontSize: 18 }}>MediChain Records</strong>
-            <Link to="/" style={active("/")}>Dashboard</Link>
-            <Link to="/upload" style={active("/upload")}>Upload</Link>
-            <Link to="/files" style={active("/files")}>My documents</Link>
-            <Link to="/verify" style={active("/verify")}>Verify</Link>
-            {user?.role === "admin" && <Link to="/admin" style={active("/admin")}>Admin</Link>}
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            <span className="muted" style={{ color: "#cbd5e1" }}>
-              {user?.email}
-            </span>
-            <button className="btn btn-danger" onClick={onLogout}>
-              Logout
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <Link to="/" className="app-brand">
+            <div className="app-brand-mark">MR</div>
+            <div className="app-brand-text">
+              <div className="app-brand-title">MediChain Records</div>
+              <div className="app-brand-subtitle">Защита целостности медицинских документов</div>
+            </div>
+          </Link>
+
+          <nav className="app-nav">
+            <Link
+              to="/"
+              className={`app-nav-link ${isActive("/") ? "app-nav-link--active" : ""}`}
+            >
+              Панель
+            </Link>
+            <Link
+              to="/upload"
+              className={`app-nav-link ${isActive("/upload") ? "app-nav-link--active" : ""}`}
+            >
+              Загрузка
+            </Link>
+            <Link
+              to="/files"
+              className={`app-nav-link ${isActive("/files") ? "app-nav-link--active" : ""}`}
+            >
+              Мои документы
+            </Link>
+            <Link
+              to="/verify"
+              className={`app-nav-link ${isActive("/verify") ? "app-nav-link--active" : ""}`}
+            >
+              Верификация
+            </Link>
+            {user?.role === "admin" && (
+              <Link
+                to="/admin"
+                className={`app-nav-link ${isActive("/admin") ? "app-nav-link--active" : ""}`}
+              >
+                Админ
+              </Link>
+            )}
+          </nav>
+
+          <div className="app-user">
+            {user?.email && (
+              <div className="app-user-pill">
+                {user.email}
+                {user.role && <span style={{ opacity: 0.8 }}> · {user.role}</span>}
+              </div>
+            )}
+            <button className="btn btn-outline btn-sm" onClick={onLogout}>
+              Выйти
             </button>
           </div>
         </div>
       </header>
 
-      <main className="container" style={{ paddingTop: 24, paddingBottom: 24 }}>
-        <Outlet />
+      <main className="app-main">
+        <div className="page-container">
+          <section className="page-main">
+            <Outlet />
+          </section>
+          <aside className="page-sidebar">
+            <div className="page-sidebar-card">
+              <h3>Безопасная медицинская платформа</h3>
+              <p>
+                Хранение файлов в защищённом хранилище и контрольные записи в блокчейне для проверки
+                подлинности.
+              </p>
+              <ul className="page-sidebar-list">
+                <li>
+                  <span className="page-sidebar-dot" />
+                  Хэш документа хранится on-chain
+                </li>
+                <li>
+                  <span className="page-sidebar-dot" />
+                  Файл остаётся в off-chain хранилище
+                </li>
+                <li>
+                  <span className="page-sidebar-dot" />
+                  Невозможность незаметно изменить историю записей
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
       </main>
 
       <Footer />
-    </>
+    </div>
   );
 };
 

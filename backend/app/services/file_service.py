@@ -139,3 +139,25 @@ class FileService:
         obj = self.get_object(user, obj_id)
         return self.storage.get_url(obj.storage_key)
 
+    def get_recent_activity(self, user: User, limit: int = 10) -> list[dict]:
+        """Return recent actions across user's documents for dashboard."""
+        q = self.db.query(ActionHistory).join(DigitalObject)
+        if user.role != "admin":
+            q = q.filter(DigitalObject.owner_id == user.id)
+        actions = (
+            q.order_by(ActionHistory.performed_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": a.id,
+                "action_type": a.action_type,
+                "performed_at": a.performed_at,
+                "file_name": a.digital_object.file_name,
+                "object_id": a.digital_object_id,
+                "details": a.details,
+            }
+            for a in actions
+        ]
+
