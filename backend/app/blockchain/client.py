@@ -83,7 +83,14 @@ class BlockchainClient:
                 }
             )
             signed = self.w3.eth.account.sign_transaction(tx, private_key=settings.CONTRACT_OWNER_PRIVATE_KEY)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            # Fallback for web3/eth-account versions: raw_transaction (snake_case) vs rawTransaction (camelCase)
+            raw_tx = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
+            if raw_tx is None:
+                raise RuntimeError(
+                    "SignedTransaction has neither raw_transaction nor rawTransaction. "
+                    "Check web3 and eth-account versions."
+                )
+            tx_hash = self.w3.eth.send_raw_transaction(raw_tx)
             logger.info(f"Sent transaction: {tx_hash.hex()}")
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
             logger.info(f"Transaction confirmed: {receipt.transactionHash.hex()}")
