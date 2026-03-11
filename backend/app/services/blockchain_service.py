@@ -27,6 +27,8 @@ class BlockchainService:
 
         object_id = str(obj.id)
         metadata_uri = f"offchain://digital_objects/{obj.id}"
+        # update status to indicate on-chain registration
+        obj.status = "REGISTERED_ON_CHAIN"
         tx_hash = client.register_object(object_id, obj.sha256_hash, owner_wallet, metadata_uri, obj.status)
 
         obj.blockchain_object_id = object_id

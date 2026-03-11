@@ -20,7 +20,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
     user = AuthService(db).authenticate(form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token, expires_in = AuthService(db).create_login_token(user)
     return Token(access_token=token, expires_in=expires_in)
 

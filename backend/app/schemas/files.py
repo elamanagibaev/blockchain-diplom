@@ -37,3 +37,10 @@ class ActionHistoryItem(BaseModel):
 class DigitalObjectWithHistory(DigitalObjectRead):
     actions: list[ActionHistoryItem]
 
+
+class Metrics(BaseModel):
+    total: int
+    on_chain: int
+    verified: int
+    invalid: int
+

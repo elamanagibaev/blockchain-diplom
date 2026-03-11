@@ -3,6 +3,7 @@ import re
 from io import BytesIO
 
 from fastapi import HTTPException, UploadFile, status
+from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -13,6 +14,7 @@ from app.storage.base import StorageBackend
 from app.storage.local_storage import LocalStorageBackend
 from app.storage.minio_storage import MinioStorageBackend
 from app.utils.hashing import sha256_file
+from app.models.verification_log import VerificationLog
 
 settings = get_settings()
 
@@ -113,4 +115,27 @@ class FileService:
             .order_by(ActionHistory.performed_at.asc())
             .all()
         )
+
+    def metrics(self, user: User) -> dict[str, int]:
+        # aggregated counts for dashboard
+        total_q = self.db.query(DigitalObject)
+        if user.role != "admin":
+            total_q = total_q.filter(DigitalObject.owner_id == user.id)
+        total = total_q.count()
+
+        on_chain = total_q.filter(DigitalObject.blockchain_tx_hash != None).count()
+
+        verified_q = self.db.query(VerificationLog).filter(VerificationLog.is_verified == True)
+        invalid_q = self.db.query(VerificationLog).filter(VerificationLog.is_verified == False)
+        if user.role != "admin":
+            verified_q = verified_q.join(DigitalObject).filter(DigitalObject.owner_id == user.id)
+            invalid_q = invalid_q.join(DigitalObject).filter(DigitalObject.owner_id == user.id)
+        verified = verified_q.count()
+        invalid = invalid_q.count()
+
+        return {"total": total, "on_chain": on_chain, "verified": verified, "invalid": invalid}
+
+    def get_download_url(self, user: User, obj_id: UUID) -> str:
+        obj = self.get_object(user, obj_id)
+        return self.storage.get_url(obj.storage_key)
 

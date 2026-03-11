@@ -1,7 +1,7 @@
 import React from "react";
 
 export type ActionItem = {
-  id: string;
+  id?: string;
   action_type: string;
   performed_at: string;
   details?: string | null;
@@ -12,8 +12,8 @@ export const ActionHistoryTimeline: React.FC<{ items: ActionItem[] }> = ({ items
   if (!items.length) return <div className="muted">No actions yet.</div>;
   return (
     <div className="grid">
-      {items.map((a) => (
-        <div className="card" key={a.id}>
+      {items.map((a, idx) => (
+        <div className="card" key={a.id || idx}>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <strong>{a.action_type}</strong>
             <span className="muted">{new Date(a.performed_at).toLocaleString()}</span>

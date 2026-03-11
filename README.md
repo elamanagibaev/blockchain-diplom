@@ -119,8 +119,39 @@ npm run dev
 
 ## Документация
 
-- `docs/architecture.md`
-- `docs/blockchain_design.md`
-- `docs/security.md`
-- `docs/api.md`
+- `docs/architecture.md` — компоненты системы и взаимодействие
+- `docs/blockchain_design.md` — дизайн smart contract
+- `docs/security.md` — вопросы безопасности
+- `docs/api.md` — API эндпоинты
+- `docs/DEPLOYMENT.md` — развертывание в production
+
+---
+
+## Администратор и начальные данные
+
+Для удобства есть вспомогательный скрипт, создающий пользователя с ролью `admin`.
+Запустите его из каталога `backend` (или внутри контейнера) при инициализации базы данных:
+
+```bash
+python -m app.scripts.create_admin
+```
+
+По умолчанию будет создан аккаунт `admin@example.com` с паролем `admin`.
+
+Вы также можете регистрировать пользователей через веб-интерфейс или `POST /api/auth/register`.
+
+Для демонстрации загрузите несколько файлов через фронтэнд — они появятся на странице "My documents";
+используйте кнопку "Register on-chain" чтобы реализовать полную цепочку.
+
+## Security & Production
+
+Проект включает:
+
+- **Rate limiting** (5 req/min на регистрацию, 10 req/min на вход)
+- **Input validation** (пароль должен содержать цифры, заглавные буквы)
+- **Input sanitization** (для хэшей, email и текстовых полей)
+- **CORS hardening** (ограничение источников)
+- **Error handling** (информативные, но безопасные сообщения об ошибках)
+
+Для production-развертывания см. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { api } from "../api/client";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
 
 export const UploadPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -32,8 +34,8 @@ export const UploadPage: React.FC = () => {
 
   return (
     <div className="grid">
+      <PageHeader title="Загрузка документа" subtitle="Зарегистрируйте медицинский файл" />
       <div className="card">
-        <h2>Загрузка и регистрация</h2>
         <p className="muted">Backend вычисляет SHA-256, сохраняет файл off-chain и метаданные в PostgreSQL.</p>
         <form onSubmit={submit} className="grid" style={{ marginTop: 16 }}>
           <div>
@@ -55,9 +57,16 @@ export const UploadPage: React.FC = () => {
         <div className="card">
           <h3>Результат</h3>
           <div className="grid" style={{ marginTop: 12 }}>
-            <div><span className="muted">Object ID:</span> <code>{result.id}</code></div>
-            <div><span className="muted">SHA-256:</span> <code>{result.sha256_hash}</code></div>
-            <div><span className="muted">Status:</span> <code>{result.status}</code></div>
+            <div>
+              <span className="muted">Object ID:</span> <code>{result.id}</code>
+            </div>
+            <div>
+              <span className="muted">SHA-256:</span> <code>{result.sha256_hash}</code>
+            </div>
+            <div>
+              <span className="muted">Status:</span>{" "}
+              <StatusBadge status={result.status} />
+            </div>
           </div>
         </div>
       )}

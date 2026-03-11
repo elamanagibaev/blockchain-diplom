@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,6 +11,7 @@ from web3.middleware import geth_poa_middleware
 from app.core.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class BlockchainNotConfiguredError(RuntimeError):
@@ -69,20 +71,26 @@ class BlockchainClient:
         if not settings.CONTRACT_OWNER_PRIVATE_KEY or not settings.CONTRACT_OWNER_ADDRESS:
             raise BlockchainNotConfiguredError("Contract owner key/address not configured")
 
-        from_addr = Web3.to_checksum_address(settings.CONTRACT_OWNER_ADDRESS)
-        nonce = self.w3.eth.get_transaction_count(from_addr)
-        tx = fn.build_transaction(
-            {
-                "from": from_addr,
-                "nonce": nonce,
-                "chainId": settings.CHAIN_ID,
-                "gasPrice": self.w3.eth.gas_price,
-            }
-        )
-        signed = self.w3.eth.account.sign_transaction(tx, private_key=settings.CONTRACT_OWNER_PRIVATE_KEY)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-        return receipt.transactionHash.hex()
+        try:
+            from_addr = Web3.to_checksum_address(settings.CONTRACT_OWNER_ADDRESS)
+            nonce = self.w3.eth.get_transaction_count(from_addr)
+            tx = fn.build_transaction(
+                {
+                    "from": from_addr,
+                    "nonce": nonce,
+                    "chainId": settings.CHAIN_ID,
+                    "gasPrice": self.w3.eth.gas_price,
+                }
+            )
+            signed = self.w3.eth.account.sign_transaction(tx, private_key=settings.CONTRACT_OWNER_PRIVATE_KEY)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            logger.info(f"Sent transaction: {tx_hash.hex()}")
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            logger.info(f"Transaction confirmed: {receipt.transactionHash.hex()}")
+            return receipt.transactionHash.hex()
+        except Exception as e:
+            logger.error(f"Transaction error: {str(e)}")
+            raise
 
     def register_object(self, object_id: str, file_hash: str, owner: str, metadata_uri: str, status: str) -> str:
         owner_addr = Web3.to_checksum_address(owner)

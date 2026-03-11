@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.schemas.files import (
     DigitalObjectCreateResponse,
     DigitalObjectRead,
     DigitalObjectWithHistory,
+    Metrics,
 )
 from app.services.file_service import FileService
 
@@ -40,10 +42,17 @@ async def upload_file(
 
 @router.get("", response_model=list[DigitalObjectRead])
 def list_files(
+    q: Optional[str] = None,
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     objs = FileService(db).list_objects(current_user)
+    if status:
+        objs = [o for o in objs if o.status == status]
+    if q:
+        ql = q.lower()
+        objs = [o for o in objs if ql in o.file_name.lower() or ql in o.sha256_hash]
     return [
         DigitalObjectRead(
             id=o.id,
@@ -61,6 +70,15 @@ def list_files(
         )
         for o in objs
     ]
+
+
+@router.get("/metrics", response_model=Metrics)
+def files_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    data = FileService(db).metrics(current_user)
+    return data
 
 
 @router.get("/{obj_id}", response_model=DigitalObjectRead)
@@ -84,6 +102,16 @@ def get_file(
         owner_id=obj.owner_id,
         storage_key=obj.storage_key,
     )
+
+
+@router.get("/{obj_id}/download")
+def download_file(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    url = FileService(db).get_download_url(current_user, obj_id)
+    return {"url": url}
 
 
 @router.get("/{obj_id}/history", response_model=DigitalObjectWithHistory)

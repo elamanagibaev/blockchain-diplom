@@ -10,7 +10,10 @@ export type FileRow = {
   blockchain_tx_hash?: string | null;
 };
 
-export const FileTable: React.FC<{ items: FileRow[] }> = ({ items }) => {
+import { StatusBadge } from "./StatusBadge";
+import { Spinner } from "./Spinner";
+
+export const FileTable: React.FC<{ items: FileRow[]; onRegister?: (id: string) => void; loadingId?: string | null }> = ({ items, onRegister, loadingId }) => {
   return (
     <table>
       <thead>
@@ -20,6 +23,7 @@ export const FileTable: React.FC<{ items: FileRow[] }> = ({ items }) => {
           <th>Status</th>
           <th>Created</th>
           <th>On-chain</th>
+          {onRegister && <th>Action</th>}
         </tr>
       </thead>
       <tbody>
@@ -31,9 +35,33 @@ export const FileTable: React.FC<{ items: FileRow[] }> = ({ items }) => {
             <td>
               <code>{f.sha256_hash.slice(0, 12)}…</code>
             </td>
-            <td>{f.status}</td>
+            <td>
+              <StatusBadge status={f.status} />
+            </td>
             <td>{new Date(f.created_at).toLocaleString()}</td>
-            <td>{f.blockchain_tx_hash ? <span className="ok">YES</span> : <span className="muted">no</span>}</td>
+            <td>
+              {f.blockchain_tx_hash ? (
+                <span className="ok">YES</span>
+              ) : (
+                <span className="muted">no</span>
+              )}
+            </td>
+            {onRegister && (
+              <td>
+                {!f.blockchain_tx_hash ? (
+                  <button
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => onRegister(f.id)}
+                    disabled={loadingId === f.id}
+                  >
+                    {loadingId === f.id ? <Spinner size={12} /> : "Register"}
+                  </button>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

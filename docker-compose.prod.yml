@@ -1,0 +1,109 @@
+version: "3.9"
+
+# Production-ready configuration.
+# Ensure sensitive values are externalized via .env or secrets.
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-file_registry}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-file_registry}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Security: Limit resource usage
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../Dockerfile.backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - SECRET_KEY=${SECRET_KEY:-CHANGE_ME_SECRET}
+      - POSTGRES_SERVER=${POSTGRES_SERVER:-db}
+      - POSTGRES_USER=${POSTGRES_USER:-app}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-app}
+      - POSTGRES_DB=${POSTGRES_DB:-file_registry}
+      - FILE_STORAGE_BACKEND=${FILE_STORAGE_BACKEND:-local}
+      - FILE_STORAGE_PATH=/data/files
+      - WEB3_PROVIDER_URL=${WEB3_PROVIDER_URL:-}
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-}
+      - CONTRACT_OWNER_PRIVATE_KEY=${CONTRACT_OWNER_PRIVATE_KEY:-}
+      - CONTRACT_OWNER_ADDRESS=${CONTRACT_OWNER_ADDRESS:-}
+      - CHAIN_ID=${CHAIN_ID:-31337}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
+    
+    volumes:
+      - backend_files:/data/files
+    ports:
+      - "8000:8000"
+    networks:
+      - app-net
+    # Health check for backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    # Security: Limit resource usage
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile.frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+    ports:
+      - "3000:80"
+    networks:
+      - app-net
+    # Security: Limit resource usage
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  db_data:
+  backend_files:
+
+networks:
+  app-net:
+    driver: bridge
+

@@ -20,9 +20,18 @@ class AuthService:
         existing = self.db.query(User).filter(User.email == user_in.email).first()
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="User with this email already exists",
             )
+        
+        # Validate wallet address if provided
+        if user_in.wallet_address:
+            if not user_in.wallet_address.startswith("0x") or len(user_in.wallet_address) != 42:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid Ethereum wallet address",
+                )
+        
         user = User(
             email=user_in.email,
             full_name=user_in.full_name,

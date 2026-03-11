@@ -5,6 +5,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.verification import FileVerificationResult
 from app.services.verification_service import VerificationService
+from app.utils.sanitizer import sanitize_hash
 
 router = APIRouter(prefix="/verify", tags=["verification"])
 
@@ -44,6 +45,20 @@ def verify_hash(
     sha256: str,
     db: Session = Depends(get_db),
 ):
+    # Sanitize hash input
+    sha256 = sanitize_hash(sha256)
+    if len(sha256) != 64:
+        return FileVerificationResult(
+            is_verified=False,
+            digital_object_id=None,
+            registered_at=None,
+            owner_id=None,
+            file_name=None,
+            description=None,
+            transaction_hash=None,
+            integrity_status="INVALID_HASH",
+        )
+    
     obj = VerificationService(db).verify_by_hash(sha256)
     if not obj:
         return FileVerificationResult(
