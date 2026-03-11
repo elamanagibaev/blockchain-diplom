@@ -60,7 +60,7 @@ export const MyFilesPage: React.FC = () => {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 22 }}>Мои медицинские документы</h2>
+            <h2 style={{ margin: 0, fontSize: 22 }}>Мои патенты и документы</h2>
             <div className="muted">
               Все файлы, которые вы загрузили в систему. Используйте фильтры, чтобы анализировать статус
               регистрации и целостности.

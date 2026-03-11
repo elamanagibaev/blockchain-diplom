@@ -15,9 +15,13 @@ from app.db.session import SessionLocal
 from app.models.user import User
 from app.models.digital_object import DigitalObject
 from app.models.action_history import ActionHistory
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.storage.base import StorageBackend
 from app.storage.local_storage import LocalStorageBackend
+from app.utils.wallet import generate_evm_wallet, encrypt_private_key
+
+settings = get_settings()
 
 
 DEMO_FILES = [
@@ -39,10 +43,14 @@ def create_users(db):
     for email, password, role in users_data:
         existing = db.query(User).filter(User.email == email).first()
         if not existing:
+            address, pk_hex = generate_evm_wallet()
+            encrypted = encrypt_private_key(pk_hex, settings.SECRET_KEY)
             user = User(
                 email=email,
                 hashed_password=get_password_hash(password),
                 role=role,
+                wallet_address=address,
+                wallet_encrypted_private_key=encrypted,
             )
             db.add(user)
             db.flush()
@@ -75,11 +83,15 @@ def create_demo_documents(db, storage: StorageBackend):
         obj = DigitalObject(
             owner_id=doctor.id,
             file_name=filename,
+            title=filename,
             mime_type=mime,
             size_bytes=len(content),
             storage_key=storage_key,
             sha256_hash=sha,
             description=f"Демо-документ: {filename}",
+            document_type="document",
+            visibility="public",
+            owner_wallet_address=doctor.wallet_address,
             status="REGISTERED",
         )
         db.add(obj)

@@ -122,6 +122,23 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {user?.wallet_address && (
+        <div className="card card-soft" style={{ marginBottom: 16 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div className="label">Ваш Blockchain Wallet</div>
+              <code style={{ fontSize: 13 }}>{user.wallet_address}</code>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {user.document_count ?? 0} документов · {user.on_chain_count ?? 0} в блокчейне
+              </div>
+            </div>
+            <Link to="/profile" className="btn btn-outline btn-sm">
+              Профиль
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="label">Наши услуги</div>
         <div className="services-grid" style={{ marginTop: 12 }}>
@@ -137,8 +154,13 @@ export const DashboardPage: React.FC = () => {
           </Link>
           <Link to="/files" className="service-card">
             <div className="service-card-icon">📁</div>
-            <h3 className="service-card-title">Мои документы</h3>
+            <h3 className="service-card-title">Мои патенты</h3>
             <p className="service-card-desc">Просмотр, статусы и регистрация в блокчейне</p>
+          </Link>
+          <Link to="/global" className="service-card">
+            <div className="service-card-icon">🌐</div>
+            <h3 className="service-card-title">Общая база патентов</h3>
+            <p className="service-card-desc">Все документы всех пользователей в реестре</p>
           </Link>
         </div>
       </div>

@@ -7,6 +7,7 @@ from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
 from app.models.action_history import ActionHistory
 from app.models.digital_object import DigitalObject
 from app.models.user import User
+from app.services.auth_service import ensure_user_wallet
 
 
 class BlockchainService:
@@ -20,6 +21,7 @@ class BlockchainService:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
     def register_on_chain(self, obj: DigitalObject, actor: User) -> str:
+        actor = ensure_user_wallet(actor, self.db)
         client = self._client()
         owner_wallet = actor.wallet_address
         if not owner_wallet:
@@ -27,10 +29,13 @@ class BlockchainService:
 
         object_id = str(obj.id)
         metadata_uri = f"offchain://digital_objects/{obj.id}"
-        # update status to indicate on-chain registration
-        obj.status = "REGISTERED_ON_CHAIN"
-        tx_hash = client.register_object(object_id, obj.sha256_hash, owner_wallet, metadata_uri, obj.status)
+        now = datetime.now(timezone.utc)
 
+        obj.status = "REGISTERED_ON_CHAIN"
+        obj.blockchain_registered_at = now
+        obj.owner_wallet_address = owner_wallet
+
+        tx_hash = client.register_object(object_id, obj.sha256_hash, owner_wallet, metadata_uri, obj.status)
         obj.blockchain_object_id = object_id
         obj.blockchain_tx_hash = tx_hash
 
@@ -39,7 +44,7 @@ class BlockchainService:
                 digital_object_id=obj.id,
                 action_type="REGISTER_ON_CHAIN",
                 performed_by_id=actor.id,
-                performed_at=datetime.now(timezone.utc),
+                performed_at=now,
                 details="On-chain registration",
                 blockchain_tx_hash=tx_hash,
             )

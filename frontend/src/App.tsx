@@ -10,6 +10,8 @@ import { MyFilesPage } from "./pages/MyFilesPage";
 import { FileDetailPage } from "./pages/FileDetailPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { AdminPage } from "./pages/AdminPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 
 const NotFoundPage: React.FC = () => (
   <div className="page" style={{ textAlign: "center", paddingTop: 48 }}>
@@ -34,6 +36,8 @@ export const App: React.FC = () => {
         { path: "files", element: <MyFilesPage /> },
         { path: "files/:id", element: <FileDetailPage /> },
         { path: "verify", element: <VerifyPage /> },
+        { path: "global", element: <GlobalRegistryPage /> },
+        { path: "profile", element: <ProfilePage /> },
         { path: "admin", element: <AdminPage /> }
       ]
     },

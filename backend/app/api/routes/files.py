@@ -42,6 +42,28 @@ async def upload_file(
     )
 
 
+def _to_read(o, owner_email: str | None = None) -> DigitalObjectRead:
+    return DigitalObjectRead(
+        id=o.id,
+        file_name=o.file_name,
+        mime_type=o.mime_type,
+        size_bytes=o.size_bytes,
+        description=o.description,
+        sha256_hash=o.sha256_hash,
+        status=o.status,
+        created_at=o.created_at,
+        blockchain_object_id=o.blockchain_object_id,
+        blockchain_tx_hash=o.blockchain_tx_hash,
+        owner_id=o.owner_id,
+        owner_wallet_address=o.owner_wallet_address or (o.owner.wallet_address if o.owner else None),
+        owner_email=owner_email or (o.owner.email if o.owner else None),
+        title=o.title or o.file_name,
+        document_type=o.document_type,
+        storage_key=o.storage_key,
+        blockchain_registered_at=o.blockchain_registered_at,
+    )
+
+
 @router.get("", response_model=list[DigitalObjectRead])
 def list_files(
     q: Optional[str] = None,
@@ -54,24 +76,32 @@ def list_files(
         objs = [o for o in objs if o.status == status]
     if q:
         ql = q.lower()
-        objs = [o for o in objs if ql in o.file_name.lower() or ql in o.sha256_hash]
-    return [
-        DigitalObjectRead(
-            id=o.id,
-            file_name=o.file_name,
-            mime_type=o.mime_type,
-            size_bytes=o.size_bytes,
-            description=o.description,
-            sha256_hash=o.sha256_hash,
-            status=o.status,
-            created_at=o.created_at,
-            blockchain_object_id=o.blockchain_object_id,
-            blockchain_tx_hash=o.blockchain_tx_hash,
-            owner_id=o.owner_id,
-            storage_key=o.storage_key,
-        )
-        for o in objs
-    ]
+        objs = [o for o in objs if ql in (o.file_name or "").lower() or ql in (o.sha256_hash or "")]
+    return [_to_read(o) for o in objs]
+
+
+@router.get("/global", response_model=list[DigitalObjectRead])
+def list_global(
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Global patent/document registry - all documents from all users."""
+    objs = FileService(db).list_objects_global(q_search=q, status_filter=status)
+    return [_to_read(o) for o in objs]
+
+
+@router.get("/global", response_model=list[DigitalObjectRead])
+def list_global(
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Global patent/document registry - all documents from all users."""
+    objs = FileService(db).list_objects_global(q_search=q, status_filter=status)
+    return [_to_read(o) for o in objs]
 
 
 @router.get("/activity/recent", response_model=RecentActivityResponse)
@@ -112,20 +142,7 @@ def get_file(
     current_user: User = Depends(get_current_user),
 ):
     obj = FileService(db).get_object(current_user, obj_id)
-    return DigitalObjectRead(
-        id=obj.id,
-        file_name=obj.file_name,
-        mime_type=obj.mime_type,
-        size_bytes=obj.size_bytes,
-        description=obj.description,
-        sha256_hash=obj.sha256_hash,
-        status=obj.status,
-        created_at=obj.created_at,
-        blockchain_object_id=obj.blockchain_object_id,
-        blockchain_tx_hash=obj.blockchain_tx_hash,
-        owner_id=obj.owner_id,
-        storage_key=obj.storage_key,
-    )
+    return _to_read(obj)
 
 
 @router.get("/{obj_id}/download")
@@ -147,19 +164,9 @@ def get_file_history(
     svc = FileService(db)
     obj = svc.get_object(current_user, obj_id)
     actions = svc.get_history(current_user, obj_id)
+    base = _to_read(obj)
     return DigitalObjectWithHistory(
-        id=obj.id,
-        file_name=obj.file_name,
-        mime_type=obj.mime_type,
-        size_bytes=obj.size_bytes,
-        description=obj.description,
-        sha256_hash=obj.sha256_hash,
-        status=obj.status,
-        created_at=obj.created_at,
-        blockchain_object_id=obj.blockchain_object_id,
-        blockchain_tx_hash=obj.blockchain_tx_hash,
-        owner_id=obj.owner_id,
-        storage_key=obj.storage_key,
+        **base.model_dump(),
         actions=[
             ActionHistoryItem(
                 id=a.id,

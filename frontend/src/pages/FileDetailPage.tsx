@@ -11,14 +11,19 @@ import { BlockchainInfoCard } from "../components/BlockchainInfoCard";
 type Data = {
   id: string;
   file_name: string;
+  title?: string | null;
   sha256_hash: string;
   status: string;
   created_at: string;
   description?: string | null;
   blockchain_object_id?: string | null;
   blockchain_tx_hash?: string | null;
+  blockchain_registered_at?: string | null;
   owner_id: string;
+  owner_wallet_address?: string | null;
+  owner_email?: string | null;
   storage_key?: string;
+  document_type?: string | null;
   actions: ActionItem[];
 };
 
@@ -113,8 +118,8 @@ export const FileDetailPage: React.FC = () => {
     <div className="page">
       <PageHeader
         title="Медицинский документ"
-        subtitle={data.file_name}
-        backTo={{ to: "/files", label: "Мои документы" }}
+        subtitle={data.title || data.file_name}
+        backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
           <button className="btn btn-primary" onClick={() => void registerOnChain()}>
             {onChainRegistered ? "Повторно зарегистрировать on-chain" : "Зарегистрировать в блокчейне"}
@@ -154,12 +159,24 @@ export const FileDetailPage: React.FC = () => {
               />
             </div>
             <div>
-              <span className="muted">Создан:</span> {new Date(data.created_at).toLocaleString()}
+              <span className="muted">Загружен:</span> {new Date(data.created_at).toLocaleString()}
             </div>
+            {data.blockchain_registered_at && (
+              <div>
+                <span className="muted">Зарегистрирован в блокчейне:</span>{" "}
+                {new Date(data.blockchain_registered_at).toLocaleString()}
+              </div>
+            )}
             <div>
-              <span className="muted">Владелец (пользователь):</span>{" "}
-              <code>{data.owner_id}</code>
+              <span className="muted">Владелец:</span>{" "}
+              {data.owner_email || data.owner_id}
             </div>
+            {data.owner_wallet_address && (
+              <div>
+                <span className="muted">Wallet владельца:</span>{" "}
+                <code style={{ fontSize: 12 }}>{data.owner_wallet_address}</code>
+              </div>
+            )}
             {data.description && (
               <div>
                 <span className="muted">Описание:</span> {data.description}
@@ -175,7 +192,23 @@ export const FileDetailPage: React.FC = () => {
         </div>
 
         <div className="card">
-          <div className="label">Blockchain proof и контрольные данные</div>
+          <div className="label">Ownership — владение документом</div>
+          <div style={{ marginTop: 8 }}>
+            <div><span className="muted">Владелец:</span> {data.owner_email || data.owner_id}</div>
+            {data.owner_wallet_address && (
+              <div style={{ marginTop: 4 }}>
+                <span className="muted">Wallet address:</span>{" "}
+                <code style={{ fontSize: 12 }}>{data.owner_wallet_address}</code>
+              </div>
+            )}
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              При регистрации в блокчейне документ привязывается к wallet-адресу владельца.
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="label">Integrity — целостность</div>
           <div style={{ marginTop: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span className="muted">SHA-256 хэш:</span> <code>{data.sha256_hash}</code>
@@ -187,10 +220,14 @@ export const FileDetailPage: React.FC = () => {
               </button>
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Любое изменение файла приведёт к смене SHA-256 хэша и нарушению соответствия с on-chain записью.
+              Любое изменение файла приведёт к смене хэша и нарушению соответствия с on-chain записью.
             </div>
           </div>
-          <div style={{ marginTop: 12 }}>
+        </div>
+
+        <div className="card">
+          <div className="label">Blockchain proof</div>
+          <div style={{ marginTop: 8 }}>
             <BlockchainInfoCard
               txHash={data.blockchain_tx_hash}
               objectId={data.blockchain_object_id}

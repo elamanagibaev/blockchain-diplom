@@ -9,7 +9,6 @@ export const RegisterPage: React.FC = () => {
   const { notify } = useNotification();
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [wallet, setWallet] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +45,6 @@ export const RegisterPage: React.FC = () => {
       await api.post("/auth/register", {
         email,
         full_name: fullName || null,
-        wallet_address: wallet || null,
         password,
       });
       notify("success", "Аккаунт создан. Войдите в систему.");
@@ -64,7 +62,7 @@ export const RegisterPage: React.FC = () => {
   return (
     <AuthLayout
       title="Создание медицинского аккаунта"
-      subtitle="Регистрация доступа к защищённой платформе MediChain Records"
+      subtitle="При регистрации автоматически создаётся blockchain wallet для привязки документов"
     >
       <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
         <div>
@@ -83,15 +81,6 @@ export const RegisterPage: React.FC = () => {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Иванов И.И."
-          />
-        </div>
-        <div>
-          <div className="label">Wallet address (опционально)</div>
-          <input
-            className="input"
-            value={wallet}
-            onChange={(e) => setWallet(e.target.value)}
-            placeholder="0x..."
           />
         </div>
         <div>

@@ -15,5 +15,8 @@ class MeResponse(BaseModel):
     full_name: str | None
     role: str
     wallet_address: str | None
+    wallet_status: str  # active | none
+    document_count: int = 0
+    on_chain_count: int = 0
     created_at: datetime
 

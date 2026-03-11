@@ -15,15 +15,21 @@ class DigitalObject(Base):
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     file_name = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=True)  # display title, defaults to file_name
     mime_type = Column(String(255), nullable=False)
     size_bytes = Column(Integer, nullable=False)
 
     storage_key = Column(String(500), nullable=False)
     sha256_hash = Column(String(64), nullable=False, index=True)
     description = Column(String(1000), nullable=True)
+    document_type = Column(String(50), nullable=True)  # patent, medical, etc.
+    visibility = Column(String(20), nullable=False, default="public")
+
+    owner_wallet_address = Column(String(100), nullable=True)  # denormalized for global view
 
     blockchain_object_id = Column(String(100), nullable=True)
     blockchain_tx_hash = Column(String(100), nullable=True)
+    blockchain_registered_at = Column(DateTime(timezone=True), nullable=True)
 
     status = Column(String(50), nullable=False, default="REGISTERED")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

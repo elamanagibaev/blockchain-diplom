@@ -45,13 +45,25 @@ export const Layout: React.FC = () => {
               to="/files"
               className={`app-nav-link ${isActive("/files") ? "app-nav-link--active" : ""}`}
             >
-              Мои документы
+              Мои патенты
+            </Link>
+            <Link
+              to="/global"
+              className={`app-nav-link ${isActive("/global") ? "app-nav-link--active" : ""}`}
+            >
+              Общая база
             </Link>
             <Link
               to="/verify"
               className={`app-nav-link ${isActive("/verify") ? "app-nav-link--active" : ""}`}
             >
               Верификация
+            </Link>
+            <Link
+              to="/profile"
+              className={`app-nav-link ${isActive("/profile") ? "app-nav-link--active" : ""}`}
+            >
+              Профиль
             </Link>
             {user?.role === "admin" && (
               <Link
@@ -67,6 +79,11 @@ export const Layout: React.FC = () => {
             {user?.email && (
               <div className="app-user-pill">
                 {user.email}
+                {user.wallet_address && (
+                  <span style={{ opacity: 0.7, fontSize: 11 }}>
+                    {" "}· {user.wallet_address.slice(0, 8)}…
+                  </span>
+                )}
                 {user.role && <span style={{ opacity: 0.8 }}> · {user.role}</span>}
               </div>
             )}

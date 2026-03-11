@@ -7,6 +7,9 @@ export type User = {
   full_name?: string | null;
   role: "user" | "admin" | string;
   wallet_address?: string | null;
+  wallet_status?: string;
+  document_count?: number;
+  on_chain_count?: number;
 };
 
 type AuthContextType = {
