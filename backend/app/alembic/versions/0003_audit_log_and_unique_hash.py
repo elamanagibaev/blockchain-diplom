@@ -16,6 +16,32 @@ depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    # Remove duplicate sha256_hash rows (keep earliest created per hash) before adding unique constraint
+    # IDs of duplicates to remove: not the one we keep per hash (keep min created_at, then min id)
+    conn.execute(sa.text("""
+        UPDATE verification_logs SET digital_object_id = NULL
+        WHERE digital_object_id IN (
+            SELECT a.id FROM digital_objects a
+            INNER JOIN digital_objects b ON a.sha256_hash = b.sha256_hash
+              AND (a.created_at > b.created_at OR (a.created_at = b.created_at AND a.id > b.id))
+        )
+    """))
+    conn.execute(sa.text("""
+        DELETE FROM action_history
+        WHERE digital_object_id IN (
+            SELECT a.id FROM digital_objects a
+            INNER JOIN digital_objects b ON a.sha256_hash = b.sha256_hash
+              AND (a.created_at > b.created_at OR (a.created_at = b.created_at AND a.id > b.id))
+        )
+    """))
+    conn.execute(sa.text("""
+        DELETE FROM digital_objects a
+        USING digital_objects b
+        WHERE a.sha256_hash = b.sha256_hash
+          AND (a.created_at > b.created_at OR (a.created_at = b.created_at AND a.id > b.id))
+    """))
+
     op.create_table(
         "audit_logs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),

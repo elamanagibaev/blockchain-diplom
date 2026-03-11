@@ -23,10 +23,10 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -56,10 +56,10 @@ jobs:
         node-version: [18.x, 20.x]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
     
@@ -80,32 +80,36 @@ jobs:
     needs: [backend-test, frontend-test]
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
     
     - name: Build backend image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v6
       with:
         context: ./backend
-        file: ./Dockerfile.backend
+        file: Dockerfile.backend
         push: false
         tags: myregistry/blockchain-diplom-backend:latest
     
     - name: Build frontend image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v6
       with:
         context: ./frontend
-        file: ./Dockerfile.frontend
+        file: Dockerfile.frontend
         push: false
         tags: myregistry/blockchain-diplom-frontend:latest
 
   security-scan:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -116,6 +120,8 @@ jobs:
         output: 'trivy-results.sarif'
     
     - name: Upload Trivy results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
+      if: always() && hashFiles('trivy-results.sarif') != ''
+      continue-on-error: true
       with:
         sarif_file: 'trivy-results.sarif'
