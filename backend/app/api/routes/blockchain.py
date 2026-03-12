@@ -1,31 +1,44 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
+from app.models.blockchain_event import BlockchainEvent
 from app.models.digital_object import DigitalObject
 from app.models.user import User
-from app.schemas.blockchain import BlockchainAction, BlockchainObject
+from app.schemas.blockchain import BlockchainAction, BlockchainEventRead, BlockchainObject
 from app.services.blockchain_service import BlockchainService
 
 router = APIRouter(prefix="/blockchain", tags=["blockchain"])
 
 
-@router.post("/register/{obj_id}")
-def register_object(
-    obj_id: UUID,
+@router.get("/events", response_model=list[BlockchainEventRead])
+def list_blockchain_events(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    obj = db.query(DigitalObject).filter(DigitalObject.id == obj_id).first()
-    if not obj:
-        raise HTTPException(status_code=404, detail="Object not found")
-    if current_user.role != "admin" and obj.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
-    tx_hash = BlockchainService(db).register_on_chain(obj, current_user)
-    return {"tx_hash": tx_hash, "object_id": obj.blockchain_object_id}
+    """Global blockchain journal: REGISTER and TRANSFER events."""
+    events = (
+        db.query(BlockchainEvent)
+        .options(joinedload(BlockchainEvent.digital_object))
+        .order_by(BlockchainEvent.timestamp.desc())
+        .all()
+    )
+    return [
+        BlockchainEventRead(
+            id=str(e.id),
+            action_type=e.action_type,
+            document_id=str(e.document_id),
+            document_file_name=e.digital_object.file_name if e.digital_object else None,
+            timestamp=e.timestamp,
+            tx_hash=e.tx_hash,
+            from_wallet=e.from_wallet,
+            to_wallet=e.to_wallet,
+            initiator_user_id=str(e.initiator_user_id) if e.initiator_user_id else None,
+        )
+        for e in events
+    ]
 
 
 @router.get("/object/{object_id}", response_model=BlockchainObject | None)

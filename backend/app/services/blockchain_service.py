@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
 from app.models.action_history import ActionHistory
+from app.models.blockchain_event import BlockchainEvent
 from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.services.auth_service import ensure_user_wallet
@@ -75,6 +76,17 @@ class BlockchainService:
                 performed_at=now,
                 details="On-chain registration",
                 blockchain_tx_hash=tx_hash,
+            )
+        )
+        self.db.add(
+            BlockchainEvent(
+                action_type="REGISTER",
+                document_id=obj.id,
+                timestamp=now,
+                tx_hash=tx_hash,
+                from_wallet=None,
+                to_wallet=owner_wallet,
+                initiator_user_id=actor.id,
             )
         )
         AuditService(self.db).log_blockchain_register_attempt(actor, obj.id, True, f"tx: {tx_hash}")

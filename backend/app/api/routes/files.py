@@ -92,15 +92,15 @@ def list_global(
     return [_to_read(o) for o in objs]
 
 
-@router.get("/global", response_model=list[DigitalObjectRead])
-def list_global(
-    q: Optional[str] = None,
-    status: Optional[str] = None,
+@router.post("/{obj_id}/submit-for-registration")
+def submit_for_registration(
+    obj_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    objs = FileService(db).list_objects_global(q_search=q, status_filter=status)
-    return [_to_read(o) for o in objs]
+    """User submits document for admin approval to register on blockchain."""
+    obj = FileService(db).submit_for_registration(current_user, obj_id)
+    return {"message": "Заявка на регистрацию отправлена", "status": obj.status}
 
 
 @router.get("/activity/recent", response_model=RecentActivityResponse)

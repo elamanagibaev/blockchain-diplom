@@ -36,16 +36,16 @@ export const MyFilesPage: React.FC = () => {
     setSearch(val);
   };
 
-  const onRegister = async (id: string) => {
+  const onSubmitForRegistration = async (id: string) => {
     setLoadingRegister(id);
     try {
-      await api.post(`/blockchain/register/${id}`);
+      await api.post(`/files/${id}/submit-for-registration`);
       await load(search, statusFilter);
-      notify("success", "Документ зарегистрирован в блокчейне.");
+      notify("success", "Заявка на регистрацию отправлена на рассмотрение администратору.");
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Ошибка регистрации";
+      const msg = err?.response?.data?.detail || "Ошибка отправки заявки";
       setError(msg);
-      notify("error", typeof msg === "string" ? msg : "Ошибка регистрации");
+      notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
     } finally {
       setLoadingRegister(null);
     }
@@ -93,15 +93,16 @@ export const MyFilesPage: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="ALL">Все статусы</option>
-              <option value="REGISTERED">Uploaded / Registered</option>
-              <option value="REGISTERED_ON_CHAIN">Registered on-chain</option>
+              <option value="UPLOADED">Загружен</option>
+              <option value="PENDING_APPROVAL">На рассмотрении</option>
+              <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
+              <option value="REJECTED">Отклонён</option>
             </select>
           </div>
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Статус <code>REGISTERED</code> означает, что файл зарегистрирован в off-chain реестре. Статус{" "}
-          <code>REGISTERED_ON_CHAIN</code> показывает, что для объекта создана запись в блокчейн-контракте
-          <code>FileRegistry</code>.
+          После загрузки нажмите «Подать на регистрацию» для отправки заявки администратору. После одобрения
+          документ будет зарегистрирован в блокчейн-контракте.
         </div>
       </div>
 
@@ -122,7 +123,7 @@ export const MyFilesPage: React.FC = () => {
             </Link>
           </div>
         ) : (
-          <FileTable items={filtered} onRegister={onRegister} loadingId={loadingRegister} />
+          <FileTable items={filtered} onSubmitForRegistration={onSubmitForRegistration} loadingId={loadingRegister} />
         )}
       </div>
     </div>

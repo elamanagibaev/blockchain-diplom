@@ -71,6 +71,12 @@ export const Layout: React.FC = () => {
             >
               Журнал
             </Link>
+            <Link
+              to="/blockchain-journal"
+              className={`app-nav-link ${isActive("/blockchain-journal") ? "app-nav-link--active" : ""}`}
+            >
+              Журнал блокчейна
+            </Link>
             {user?.role === "admin" && (
               <Link
                 to="/admin"

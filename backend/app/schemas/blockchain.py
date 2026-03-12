@@ -19,3 +19,15 @@ class BlockchainAction(BaseModel):
     actor: str
     details: str | None = None
 
+
+class BlockchainEventRead(BaseModel):
+    id: str
+    action_type: str
+    document_id: str
+    document_file_name: str | None = None
+    timestamp: datetime
+    tx_hash: str
+    from_wallet: str | None
+    to_wallet: str | None
+    initiator_user_id: str | None
+

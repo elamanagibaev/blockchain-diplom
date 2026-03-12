@@ -7,7 +7,9 @@ export type StatusBadgeProps = {
 };
 
 const statusColors: Record<string, string> = {
+  UPLOADED: "--color-primary",
   REGISTERED: "--color-primary",
+  PENDING_APPROVAL: "#f59e0b",
   REGISTERED_ON_CHAIN: "--color-accent",
   PENDING_ON_CHAIN: "--color-primary",
   VERIFIED: "--color-success",
@@ -21,7 +23,9 @@ const statusColors: Record<string, string> = {
 };
 
 const statusLabelsRu: Record<string, string> = {
+  UPLOADED: "Загружен",
   REGISTERED: "Загружен",
+  PENDING_APPROVAL: "На рассмотрении",
   REGISTERED_ON_CHAIN: "В блокчейне",
   PENDING_ON_CHAIN: "Ожидает on-chain",
   VERIFIED: "Верифицирован",

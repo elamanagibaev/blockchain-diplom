@@ -16,6 +16,7 @@ from app.storage.local_storage import LocalStorageBackend
 from app.storage.minio_storage import MinioStorageBackend
 from app.utils.hashing import sha256_file
 from app.models.verification_log import VerificationLog
+from app.models.blockchain_event import BlockchainEvent
 from app.services.audit_service import AuditService
 
 settings = get_settings()
@@ -95,7 +96,7 @@ class FileService:
             document_type=doc_type,
             owner_wallet_address=user.wallet_address,
             visibility="public",
-            status="REGISTERED",
+            status="UPLOADED",
         )
         self.db.add(obj)
         self.db.flush()
@@ -136,6 +137,39 @@ class FileService:
         if status_filter:
             query = query.filter(DigitalObject.status == status_filter)
         return query.order_by(DigitalObject.created_at.desc()).all()
+
+    def submit_for_registration(self, user: User, obj_id: UUID) -> DigitalObject:
+        """User submits document for admin approval to register on blockchain."""
+        obj = self.get_object(user, obj_id, require_owner=True)
+        if obj.blockchain_tx_hash:
+            raise HTTPException(status_code=400, detail="Документ уже зарегистрирован в блокчейне")
+        if obj.status not in ("UPLOADED", "REGISTERED", "REJECTED"):
+            raise HTTPException(
+                status_code=400,
+                detail="Можно подать заявку только для загруженных или отклонённых документов",
+            )
+        obj.status = "PENDING_APPROVAL"
+        self.db.add(
+            ActionHistory(
+                digital_object_id=obj.id,
+                action_type="SUBMIT_FOR_REGISTRATION",
+                performed_by_id=user.id,
+                details="Заявка на регистрацию в блокчейне",
+            )
+        )
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def list_pending_registrations(self) -> list[DigitalObject]:
+        """List documents with PENDING_APPROVAL for admin."""
+        return (
+            self.db.query(DigitalObject)
+            .options(joinedload(DigitalObject.owner))
+            .filter(DigitalObject.status == "PENDING_APPROVAL")
+            .order_by(DigitalObject.created_at.desc())
+            .all()
+        )
 
     def get_object(self, user: User, obj_id, require_owner: bool = False) -> DigitalObject:
         """Get object by id. If require_owner=False, any authenticated user can view (for global registry)."""
@@ -206,16 +240,29 @@ class FileService:
         obj.owner_wallet_address = to_wallet
         obj.status = "TRANSFERRED"
 
+        tx_hash: str | None = None
         if obj.blockchain_object_id:
             try:
                 from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
                 client = BlockchainClient()
-                client.transfer_ownership(str(obj.id), to_wallet)
+                tx_hash = client.transfer_ownership(str(obj.id), to_wallet)
             except BlockchainNotConfiguredError:
                 pass
             except Exception:
                 self.db.rollback()
                 raise HTTPException(status_code=500, detail="Ошибка обновления ownership в блокчейне")
+
+        if tx_hash:
+            self.db.add(
+                BlockchainEvent(
+                    action_type="TRANSFER",
+                    document_id=obj.id,
+                    tx_hash=tx_hash,
+                    from_wallet=from_wallet,
+                    to_wallet=to_wallet,
+                    initiator_user_id=user.id,
+                )
+            )
 
         self.db.add(
             ActionHistory(

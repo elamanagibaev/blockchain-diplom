@@ -34,7 +34,7 @@ export const FileDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chainActions, setChainActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [registering, setRegistering] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [transferWallet, setTransferWallet] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -77,19 +77,19 @@ export const FileDetailPage: React.FC = () => {
     }
   };
 
-  const registerOnChain = async () => {
+  const submitForRegistration = async () => {
     if (!id) return;
     setError(null);
-    setRegistering(true);
+    setSubmitting(true);
     try {
-      await api.post(`/blockchain/register/${id}`);
+      await api.post(`/files/${id}/submit-for-registration`);
       await load();
-      notify("success", "Документ зарегистрирован в блокчейне.");
+      notify("success", "Заявка на регистрацию отправлена на рассмотрение администратору.");
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Ошибка регистрации в блокчейне";
-      notify("error", typeof msg === "string" ? msg : "Ошибка регистрации");
+      const msg = err?.response?.data?.detail || "Ошибка отправки заявки";
+      notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
     } finally {
-      setRegistering(false);
+      setSubmitting(false);
     }
   };
 
@@ -136,6 +136,7 @@ export const FileDetailPage: React.FC = () => {
   }
 
   const onChainRegistered = Boolean(data.blockchain_tx_hash);
+  const canSubmit = !onChainRegistered && ["UPLOADED", "REGISTERED", "REJECTED"].includes(data.status);
   const isOwner = user?.id === data.owner_id || user?.role === "admin";
 
   return (
@@ -145,15 +146,17 @@ export const FileDetailPage: React.FC = () => {
         subtitle={data.title || data.file_name}
         backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
-          onChainRegistered ? null : (
+          onChainRegistered ? null : canSubmit ? (
             <button
               className="btn btn-primary"
-              onClick={() => void registerOnChain()}
-              disabled={registering}
+              onClick={() => void submitForRegistration()}
+              disabled={submitting}
             >
-              {registering ? "Регистрация…" : "Зарегистрировать в блокчейне"}
+              {submitting ? "Отправка…" : "Подать на регистрацию"}
             </button>
-          )
+          ) : data.status === "PENDING_APPROVAL" ? (
+            <span className="muted" style={{ fontSize: 14 }}>Ожидает одобрения администратора</span>
+          ) : null
         }
       />
 
@@ -183,7 +186,7 @@ export const FileDetailPage: React.FC = () => {
               <StatusBadge
                 status={
                   data.status === "REGISTERED" && !data.blockchain_tx_hash
-                    ? "PENDING_ON_CHAIN"
+                    ? "UPLOADED"
                     : data.status
                 }
               />
@@ -240,8 +243,8 @@ export const FileDetailPage: React.FC = () => {
         <div className="card">
           <div className="label">Integrity — целостность</div>
           <div style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span className="muted">SHA-256 хэш:</span> <code>{data.sha256_hash}</code>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+              <span className="muted">SHA-256 хэш:</span> <code style={{ wordBreak: "break-all" }}>{data.sha256_hash}</code>
               <button
                 className="btn btn-outline btn-sm"
                 onClick={() => navigator.clipboard.writeText(data.sha256_hash)}

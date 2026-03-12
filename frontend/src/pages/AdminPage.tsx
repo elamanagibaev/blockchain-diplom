@@ -19,12 +19,29 @@ type AdminUser = {
   is_active: boolean;
 };
 
+type PendingDoc = {
+  id: string;
+  file_name: string;
+  sha256_hash: string;
+  owner_email?: string | null;
+  created_at: string;
+};
+
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
   const [health, setHealth] = useState<Health | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  const loadPending = () => {
+    api
+      .get<PendingDoc[]>("/admin/documents/pending")
+      .then((r) => setPendingDocs(r.data))
+      .catch(() => setPendingDocs([]));
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -38,7 +55,36 @@ export const AdminPage: React.FC = () => {
         .then((r) => setUsers(r.data))
         .catch(() => setUsers([])),
     ]).finally(() => setLoading(false));
+    loadPending();
   }, []);
+
+  const approveDoc = (id: string) => {
+    setActionId(id);
+    api
+      .post(`/admin/documents/${id}/approve`)
+      .then(() => {
+        loadPending();
+        notify("success", "Документ зарегистрирован в блокчейне.");
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Ошибка регистрации");
+      })
+      .finally(() => setActionId(null));
+  };
+
+  const rejectDoc = (id: string) => {
+    setActionId(id);
+    api
+      .post(`/admin/documents/${id}/reject`)
+      .then(() => {
+        loadPending();
+        notify("success", "Заявка отклонена.");
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Ошибка отклонения");
+      })
+      .finally(() => setActionId(null));
+  };
 
   const updateRole = (id: string, role: string) => {
     api
@@ -118,12 +164,63 @@ export const AdminPage: React.FC = () => {
       </div>
 
       <div className="card">
+        <h3 style={{ marginTop: 0 }}>Заявки на регистрацию (Pending Registrations)</h3>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          Документы, ожидающие одобрения для регистрации в блокчейне.
+        </div>
+        {pendingDocs.length === 0 ? (
+          <div className="muted" style={{ padding: "12px 0" }}>Нет заявок на рассмотрении.</div>
+        ) : (
+          <div className="table-scroll">
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th>Документ</th>
+                <th>Владелец</th>
+                <th>Дата</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingDocs.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.file_name}</td>
+                  <td>{d.owner_email || "—"}</td>
+                  <td>{new Date(d.created_at).toLocaleString()}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => approveDoc(d.id)}
+                        disabled={actionId === d.id}
+                      >
+                        {actionId === d.id ? "…" : "Approve"}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => rejectDoc(d.id)}
+                        disabled={actionId === d.id}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
         <h3 style={{ marginTop: 0 }}>Пользователи</h3>
         {loading ? (
           <div className="text-center" style={{ padding: "12px 0" }}>
             <Spinner size={28} />
           </div>
         ) : (
+          <div className="table-scroll">
           <table className="w-full">
             <thead>
               <tr>
@@ -167,6 +264,7 @@ export const AdminPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
