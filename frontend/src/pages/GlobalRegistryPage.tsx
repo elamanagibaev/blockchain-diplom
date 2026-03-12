@@ -22,6 +22,10 @@ export const GlobalRegistryPage: React.FC = () => {
   const [items, setItems] = useState<DocRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [ownerWallet, setOwnerWallet] = useState("");
+  const [txHashFilter, setTxHashFilter] = useState("");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -30,6 +34,10 @@ export const GlobalRegistryPage: React.FC = () => {
       const params: Record<string, string> = {};
       if (search) params.q = search;
       if (statusFilter) params.status = statusFilter;
+      if (ownerWallet.trim()) params.owner_wallet = ownerWallet.trim();
+      if (txHashFilter.trim()) params.tx_hash = txHashFilter.trim();
+      params.sort_by = sortBy;
+      params.sort_order = sortOrder;
       const res = await api.get<DocRow[]>("/files/global", { params });
       setItems(res.data);
     } catch {
@@ -41,7 +49,7 @@ export const GlobalRegistryPage: React.FC = () => {
 
   useEffect(() => {
     void load();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, ownerWallet, txHashFilter, sortBy, sortOrder]);
 
   const displayName = (r: DocRow) => r.title || r.file_name;
 
@@ -73,15 +81,53 @@ export const GlobalRegistryPage: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div style={{ minWidth: 200 }}>
+          <div style={{ minWidth: 180 }}>
+            <input
+              className="input"
+              placeholder="Wallet владельца..."
+              value={ownerWallet}
+              onChange={(e) => setOwnerWallet(e.target.value)}
+            />
+          </div>
+          <div style={{ minWidth: 160 }}>
+            <input
+              className="input"
+              placeholder="Tx hash..."
+              value={txHashFilter}
+              onChange={(e) => setTxHashFilter(e.target.value)}
+            />
+          </div>
+          <div style={{ minWidth: 160 }}>
             <select
               className="input"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="">Все статусы</option>
+              <option value="UPLOADED">Загружен</option>
               <option value="REGISTERED">Off-chain</option>
+              <option value="PENDING_APPROVAL">На рассмотрении</option>
               <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
+              <option value="REJECTED">Отклонён</option>
+              <option value="TRANSFERRED">Передан</option>
+            </select>
+          </div>
+          <div style={{ minWidth: 140 }}>
+            <select
+              className="input"
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const v = e.target.value;
+                const [s, o] = v.split("-");
+                setSortBy(s);
+                setSortOrder(o as "asc" | "desc");
+              }}
+            >
+              <option value="created_at-desc">Дата (новые)</option>
+              <option value="created_at-asc">Дата (старые)</option>
+              <option value="blockchain_registered_at-desc">On-chain (новые)</option>
+              <option value="file_name-asc">Название А–Я</option>
+              <option value="file_name-desc">Название Я–А</option>
             </select>
           </div>
         </div>

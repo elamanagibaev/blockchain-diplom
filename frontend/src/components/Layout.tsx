@@ -21,10 +21,10 @@ export const Layout: React.FC = () => {
       <header className="app-header">
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
-            <div className="app-brand-mark">MR</div>
+            <div className="app-brand-mark">BP</div>
             <div className="app-brand-text">
-              <div className="app-brand-title">MediChain Records</div>
-              <div className="app-brand-subtitle">Защита целостности медицинских документов</div>
+              <div className="app-brand-title">BlockProof</div>
+              <div className="app-brand-subtitle">Blockchain platform for data verification</div>
             </div>
           </Link>
 
@@ -72,10 +72,10 @@ export const Layout: React.FC = () => {
               Журнал
             </Link>
             <Link
-              to="/blockchain-journal"
-              className={`app-nav-link ${isActive("/blockchain-journal") ? "app-nav-link--active" : ""}`}
+              to="/explorer"
+              className={`app-nav-link ${isActive("/explorer") || isActive("/blockchain-journal") ? "app-nav-link--active" : ""}`}
             >
-              Журнал блокчейна
+              Explorer
             </Link>
             {user?.role === "admin" && (
               <Link
@@ -113,10 +113,10 @@ export const Layout: React.FC = () => {
           </section>
           <aside className="page-sidebar">
             <div className="page-sidebar-card">
-              <h3>Безопасная медицинская платформа</h3>
+              <h3>Платформа верификации данных</h3>
               <p>
                 Хранение файлов в защищённом хранилище и контрольные записи в блокчейне для проверки
-                подлинности.
+                подлинности и целостности.
               </p>
               <ul className="page-sidebar-list">
                 <li>

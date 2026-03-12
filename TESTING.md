@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document provides comprehensive testing instructions for the MediChain Records system.
+This document provides comprehensive testing instructions for the BlockProof system.
 
 ## Prerequisites
 

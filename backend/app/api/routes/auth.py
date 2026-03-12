@@ -6,10 +6,17 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.digital_object import DigitalObject
 from app.models.user import User
-from app.schemas.auth import MeResponse, Token
+from app.schemas.auth import (
+    MeResponse,
+    Token,
+    WalletChallengeRequest,
+    WalletChallengeResponse,
+    WalletVerifyRequest,
+)
 from app.schemas.user import UserCreate, UserRead
 from app.services.auth_service import AuthService
 from app.services.audit_service import AuditService
+from app.services.wallet_auth import create_challenge, verify_signature_and_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -55,4 +62,22 @@ def me(
         on_chain_count=on_chain,
         created_at=current_user.created_at,
     )
+
+
+@router.post("/wallet/challenge", response_model=WalletChallengeResponse)
+def wallet_challenge(body: WalletChallengeRequest):
+    """Get challenge message to sign with wallet. No auth required."""
+    message, nonce, expires_at = create_challenge(body.wallet_address)
+    return WalletChallengeResponse(
+        message_to_sign=message,
+        nonce=nonce,
+        expires_at=expires_at,
+    )
+
+
+@router.post("/wallet/verify", response_model=Token)
+def wallet_verify(body: WalletVerifyRequest, db: Session = Depends(get_db)):
+    """Verify wallet signature and return access token. No auth required."""
+    token, expires_in = verify_signature_and_login(db, body.wallet_address, body.signature)
+    return Token(access_token=token, token_type="bearer", expires_in=expires_in)
 

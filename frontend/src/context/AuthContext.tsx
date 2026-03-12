@@ -16,6 +16,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithToken: (token?: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -53,12 +54,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await fetchMe();
   };
 
+  const loginWithToken = async (token?: string) => {
+    if (token) localStorage.setItem("access_token", token);
+    await fetchMe();
+  };
+
   const logout = () => {
     localStorage.removeItem("access_token");
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);
+  const value = useMemo(() => ({ user, loading, login, loginWithToken, logout }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

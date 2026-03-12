@@ -1,7 +1,7 @@
 /**
  * История входивших аккаунтов (email) — только для UI, пароли не хранятся.
  */
-const STORAGE_KEY = "medichain_login_history";
+const STORAGE_KEY = "blockproof_login_history";
 const MAX_ITEMS = 10;
 
 export type LoginHistoryItem = {

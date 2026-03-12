@@ -14,6 +14,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { BlockchainJournalPage } from "./pages/BlockchainJournalPage";
+import { CertificatePage } from "./pages/CertificatePage";
 
 const NotFoundPage: React.FC = () => (
   <div className="page" style={{ textAlign: "center", paddingTop: 48 }}>
@@ -38,15 +39,18 @@ export const App: React.FC = () => {
         { path: "files", element: <MyFilesPage /> },
         { path: "files/:id", element: <FileDetailPage /> },
         { path: "verify", element: <VerifyPage /> },
+        { path: "certificate/:id", element: <CertificatePage /> },
         { path: "global", element: <GlobalRegistryPage /> },
         { path: "profile", element: <ProfilePage /> },
         { path: "audit", element: <AuditLogsPage /> },
         { path: "blockchain-journal", element: <BlockchainJournalPage /> },
+        { path: "explorer", element: <BlockchainJournalPage /> },
         { path: "admin", element: <AdminPage /> }
       ]
     },
     { path: "/login", element: <LoginPage /> },
     { path: "/register", element: <RegisterPage /> },
+    { path: "/verify/hash/:hash", element: <CertificatePage mode="hash" /> },
     { path: "*", element: <NotFoundPage /> }
   ]);
 

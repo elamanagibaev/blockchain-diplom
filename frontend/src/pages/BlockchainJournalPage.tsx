@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
@@ -34,8 +35,8 @@ export const BlockchainJournalPage: React.FC = () => {
   return (
     <div className="page">
       <PageHeader
-        title="Журнал блокчейна"
-        subtitle="Глобальный реестр событий: регистрация и передача документов"
+        title="Blockchain Explorer"
+        subtitle="Регистрации и передачи документов в блокчейне: tx hash, кошельки, документы"
       />
       <div className="card">
         {error && (
@@ -76,7 +77,11 @@ export const BlockchainJournalPage: React.FC = () => {
                       {actionLabel(e.action_type)}
                     </span>
                   </td>
-                  <td>{e.document_file_name || e.document_id}</td>
+                  <td>
+                    <Link to={`/files/${e.document_id}`} style={{ fontWeight: 500 }}>
+                      {e.document_file_name || e.document_id}
+                    </Link>
+                  </td>
                   <td>
                     <code style={{ fontSize: 11 }}>{e.from_wallet ? `${e.from_wallet.slice(0, 10)}…` : "—"}</code>
                   </td>
@@ -84,7 +89,17 @@ export const BlockchainJournalPage: React.FC = () => {
                     <code style={{ fontSize: 11 }}>{e.to_wallet ? `${e.to_wallet.slice(0, 10)}…` : "—"}</code>
                   </td>
                   <td>
-                    <code style={{ fontSize: 11 }}>{e.tx_hash.slice(0, 18)}…</code>
+                    <code style={{ fontSize: 11 }} title={e.tx_hash}>
+                      {e.tx_hash.slice(0, 18)}…
+                    </code>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ marginLeft: 4 }}
+                      onClick={() => navigator.clipboard.writeText(e.tx_hash)}
+                      title="Копировать"
+                    >
+                      ⎘
+                    </button>
                   </td>
                   <td>{new Date(e.timestamp).toLocaleString()}</td>
                 </tr>

@@ -9,10 +9,14 @@ class FileVerificationResult(BaseModel):
     digital_object_id: UUID | None
     registered_at: datetime | None
     owner_id: UUID | None
+    owner_wallet_address: str | None = None
     file_name: str | None
     description: str | None
     transaction_hash: str | None
+    blockchain_registered_at: datetime | None = None
+    blockchain_object_id: str | None = None
+    status: str | None = None
     integrity_status: str
-    sha256_hash: str | None = None  # computed or provided hash used for verification
-    sha256_stored: str | None = None  # hash stored in registry (when found)
+    sha256_hash: str | None = None
+    sha256_stored: str | None = None
 

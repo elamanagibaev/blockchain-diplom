@@ -1,4 +1,5 @@
 import mimetypes
+import os
 import re
 from io import BytesIO
 
@@ -42,10 +43,19 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", name)[:200] or "file"
 
 
-def get_storage_backend() -> StorageBackend:
-    if settings.FILE_STORAGE_BACKEND == "minio":
+def get_storage_backend(backend: str = "auto") -> StorageBackend:
+    """backend: 'auto' (from config), 'local', or 'minio'."""
+    if backend == "minio":
         return MinioStorageBackend()
-    return LocalStorageBackend()
+    if backend == "local" or (backend == "auto" and settings.FILE_STORAGE_BACKEND != "minio"):
+        return LocalStorageBackend()
+    return MinioStorageBackend()
+
+
+def _storage_for_obj(obj: DigitalObject) -> StorageBackend:
+    """Return the storage backend where this object's file lives."""
+    backend = getattr(obj, "storage_backend", None) or "local"
+    return get_storage_backend(backend)
 
 
 class FileService:
@@ -79,7 +89,10 @@ class FileService:
                 detail="Документ с таким хэшем уже зарегистрирован в системе. Один файл не может принадлежать разным пользователям.",
             )
 
-        storage_key = self.storage.save(BytesIO(raw), filename)
+        # Всегда сохраняем в локальное хранилище при загрузке. В MinIO попадут только
+        # файлы, прошедшие регистрацию в блокчейне (при approve админом).
+        local_storage = LocalStorageBackend()
+        storage_key = local_storage.save(BytesIO(raw), filename)
 
         doc_type = _infer_document_type(mime, filename)
         title = description or filename
@@ -91,6 +104,7 @@ class FileService:
             mime_type=mime,
             size_bytes=len(raw),
             storage_key=storage_key,
+            storage_backend="local",
             sha256_hash=sha,
             description=description,
             document_type=doc_type,
@@ -121,9 +135,15 @@ class FileService:
         return q.order_by(DigitalObject.created_at.desc()).all()
 
     def list_objects_global(
-        self, q_search: str | None = None, status_filter: str | None = None
+        self,
+        q_search: str | None = None,
+        status_filter: str | None = None,
+        owner_wallet: str | None = None,
+        tx_hash: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
     ) -> list[DigitalObject]:
-        """List all documents for global patent registry."""
+        """List all documents for global patent registry with search and filters."""
         query = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
         if q_search:
             ql = q_search.lower()
@@ -136,7 +156,29 @@ class FileService:
             )
         if status_filter:
             query = query.filter(DigitalObject.status == status_filter)
-        return query.order_by(DigitalObject.created_at.desc()).all()
+        if owner_wallet and owner_wallet.strip():
+            w = owner_wallet.strip()
+            query = query.join(User, DigitalObject.owner_id == User.id).filter(
+                or_(
+                    DigitalObject.owner_wallet_address.ilike(f"%{w}%"),
+                    User.wallet_address.ilike(f"%{w}%"),
+                )
+            )
+        if tx_hash and tx_hash.strip():
+            query = query.filter(DigitalObject.blockchain_tx_hash.ilike(f"%{tx_hash.strip()}%"))
+
+        order_col = DigitalObject.created_at
+        if sort_by == "blockchain_registered_at":
+            order_col = DigitalObject.blockchain_registered_at
+        elif sort_by == "file_name":
+            order_col = DigitalObject.file_name
+        elif sort_by == "status":
+            order_col = DigitalObject.status
+        if sort_order == "asc":
+            query = query.order_by(order_col.asc().nullslast())
+        else:
+            query = query.order_by(order_col.desc().nullslast())
+        return query.all()
 
     def submit_for_registration(self, user: User, obj_id: UUID) -> DigitalObject:
         """User submits document for admin approval to register on blockchain."""
@@ -212,7 +254,36 @@ class FileService:
 
     def get_download_url(self, user: User, obj_id: UUID) -> str:
         obj = self.get_object(user, obj_id, require_owner=True)  # only owner can download
-        return self.storage.get_url(obj.storage_key)
+        return _storage_for_obj(obj).get_url(obj.storage_key)
+
+    def get_download_stream(self, user: User, obj_id: UUID):
+        """Yield (chunk_generator, filename, mime_type) for streaming download."""
+        obj = self.get_object(user, obj_id, require_owner=True)
+        storage = _storage_for_obj(obj)
+        return storage.get_stream(obj.storage_key), obj.file_name, obj.mime_type
+
+    def migrate_file_to_minio(self, obj: DigitalObject) -> None:
+        """
+        После успешной регистрации в блокчейне копирует файл из local в MinIO.
+        Вызывается из admin approve. MinIO должен быть сконфигурирован.
+        """
+        if getattr(obj, "storage_backend", None) == "minio":
+            return  # уже в MinIO
+        if settings.FILE_STORAGE_BACKEND != "minio":
+            return  # MinIO не используется
+        local = LocalStorageBackend()
+        path = os.path.join(local.base_path, obj.storage_key)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Local file not found: {path}")
+        minio_backend = MinioStorageBackend()
+        with open(path, "rb") as f:
+            minio_backend.put_with_key(obj.storage_key, f)
+        obj.storage_backend = "minio"
+        self.db.add(obj)
+        try:
+            os.remove(path)
+        except OSError:
+            pass  # не критично, файл уже в MinIO
 
     def transfer_document(
         self, user: User, obj_id: UUID, to_wallet_address: str

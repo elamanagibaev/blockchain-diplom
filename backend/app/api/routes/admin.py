@@ -73,6 +73,13 @@ def approve_registration(
     if not owner:
         raise HTTPException(status_code=400, detail="Document has no owner")
     tx_hash = BlockchainService(db).register_on_chain(obj, owner)
+    # После регистрации в блокчейне переносим файл в MinIO (если MinIO включён)
+    try:
+        FileService(db).migrate_file_to_minio(obj)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"tx_hash": tx_hash, "object_id": obj.blockchain_object_id, "status": "REGISTERED_ON_CHAIN"}
 
 

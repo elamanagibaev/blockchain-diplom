@@ -2,7 +2,7 @@
 
 ## Overview
 
-**MediChain Records** is a production-ready, full-stack blockchain-based file registry system developed as a diploma project. The system securely stores and verifies digital documents with optional blockchain registration for immutable proof of custody and integrity.
+**BlockProof** is a production-ready, full-stack blockchain-based file registry system developed as a diploma project. The system securely stores and verifies digital documents with optional blockchain registration for immutable proof of custody and integrity.
 
 ---
 
@@ -351,7 +351,7 @@ Potential improvements for production:
 
 ## Conclusion
 
-The **MediChain Records** system demonstrates a complete, production-ready blockchain-based file registry with:
+The **BlockProof** system demonstrates a complete, production-ready blockchain-based file registry with:
 
 - ✅ Secure authentication and authorization
 - ✅ Robust input validation and sanitization

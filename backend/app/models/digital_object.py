@@ -20,6 +20,7 @@ class DigitalObject(Base):
     size_bytes = Column(Integer, nullable=False)
 
     storage_key = Column(String(500), nullable=False)
+    storage_backend = Column(String(20), nullable=False, default="local")  # "local" | "minio"
     sha256_hash = Column(String(64), nullable=False, index=True)
     description = Column(String(1000), nullable=True)
     document_type = Column(String(50), nullable=True)  # patent, medical, etc.

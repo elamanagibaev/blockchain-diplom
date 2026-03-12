@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
@@ -37,9 +37,44 @@ export const FileDetailPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [transferWallet, setTransferWallet] = useState("");
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const { notify } = useNotification();
   const { user } = useAuth();
+
+  const handleDownload = async () => {
+    if (!id || !data) return;
+    setDownloading(true);
+    try {
+      const res = await api.get(`/files/${id}/download`, { responseType: "blob" });
+      const blob = new Blob([res.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.file_name || "document";
+      a.click();
+      URL.revokeObjectURL(url);
+      notify("success", "Файл скачан");
+    } catch (err: any) {
+      let msg = "Ошибка скачивания";
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.detail || msg;
+        } catch {
+          // ignore
+        }
+      } else if (typeof data?.detail === "string") {
+        msg = data.detail;
+      } else if (Array.isArray(data?.detail)) {
+        msg = data.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+      }
+      notify("error", msg);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const load = async () => {
     if (!id) return;
@@ -49,12 +84,6 @@ export const FileDetailPage: React.FC = () => {
       const res = await api.get<Data>(`/files/${id}/history`);
       const dto = res.data as any;
       setData(dto);
-      try {
-        const dres = await api.get<{ url: string }>(`/files/${id}/download`);
-        setDownloadUrl(dres.data.url);
-      } catch {
-        setDownloadUrl(null);
-      }
       if (dto.blockchain_object_id) {
         try {
           const hres = await api.get<any[]>(`/blockchain/object/${dto.blockchain_object_id}/history`);
@@ -146,17 +175,22 @@ export const FileDetailPage: React.FC = () => {
         subtitle={data.title || data.file_name}
         backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
-          onChainRegistered ? null : canSubmit ? (
-            <button
-              className="btn btn-primary"
-              onClick={() => void submitForRegistration()}
-              disabled={submitting}
-            >
-              {submitting ? "Отправка…" : "Подать на регистрацию"}
-            </button>
-          ) : data.status === "PENDING_APPROVAL" ? (
-            <span className="muted" style={{ fontSize: 14 }}>Ожидает одобрения администратора</span>
-          ) : null
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {onChainRegistered ? null : canSubmit ? (
+              <button
+                className="btn btn-primary"
+                onClick={() => void submitForRegistration()}
+                disabled={submitting}
+              >
+                {submitting ? "Отправка…" : "Подать на регистрацию"}
+              </button>
+            ) : data.status === "PENDING_APPROVAL" ? (
+              <span className="muted" style={{ fontSize: 14 }}>Ожидает одобрения администратора</span>
+            ) : null}
+            <Link to={`/certificate/${data.id}`} className="btn btn-outline btn-sm">
+              Сертификат
+            </Link>
+          </div>
         }
       />
 
@@ -169,16 +203,16 @@ export const FileDetailPage: React.FC = () => {
             </div>
             <div>
               <span className="muted">Имя файла:</span> <strong>{data.file_name}</strong>
-              {downloadUrl && (
-                <a
-                  href={downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
+              {isOwner && (
+                <button
+                  type="button"
                   className="btn btn-outline btn-sm"
                   style={{ marginLeft: 8 }}
+                  onClick={() => void handleDownload()}
+                  disabled={downloading}
                 >
-                  Скачать
-                </a>
+                  {downloading ? "Скачивание…" : "Скачать"}
+                </button>
               )}
             </div>
             <div>
@@ -296,28 +330,27 @@ export const FileDetailPage: React.FC = () => {
       )}
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>История действий (off-chain аудит)</h3>
+        <h3 style={{ marginTop: 0 }}>История документов (Timeline)</h3>
         <div className="muted" style={{ fontSize: 12 }}>
-          Каждое действие с документом (загрузка, изменение статуса, регистрация on-chain) фиксируется в базе
-          данных и может быть предъявлено в качестве аудиторского следа.
+          Хронология событий: загрузка, подача на регистрацию, одобрение/отклонение, регистрация в блокчейне,
+          передача владения. События из БД и контракта <code>FileRegistry</code> объединены.
         </div>
         <div style={{ marginTop: 12 }}>
-          <ActionHistoryTimeline items={data.actions} />
+          <ActionHistoryTimeline
+            items={[
+              ...(data.actions || []).map((a) => ({
+                ...a,
+                performed_at: typeof a.performed_at === "string" ? a.performed_at : (a as any).performed_at,
+              })),
+              ...chainActions,
+            ].sort(
+              (a, b) =>
+                new Date((a.performed_at as string) || 0).getTime() -
+                new Date((b.performed_at as string) || 0).getTime()
+            )}
+          />
         </div>
       </div>
-
-      {chainActions.length > 0 && (
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>История действий (blockchain)</h3>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Эти события получены напрямую из контракта <code>FileRegistry</code> и демонстрируют неизменяемый
-            on-chain след.
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <ActionHistoryTimeline items={chainActions} />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

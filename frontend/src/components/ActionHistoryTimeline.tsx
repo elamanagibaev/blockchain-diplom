@@ -11,8 +11,13 @@ export type ActionItem = {
 export const actionLabels: Record<string, string> = {
   REGISTER: "Загрузка документа",
   REGISTER_ON_CHAIN: "Регистрация в блокчейне",
+  SUBMIT_FOR_REGISTRATION: "Подача на регистрацию в блокчейн",
+  PENDING_APPROVAL: "Ожидает одобрения администратора",
+  APPROVE: "Одобрено администратором",
+  REJECT: "Отклонено администратором",
   VERIFY: "Проверка подлинности",
   TRANSFER_OWNERSHIP: "Передача владения",
+  TRANSFER: "Передача документа",
   CREATE_LICENSE: "Создание лицензии",
   CHANGE_STATUS: "Изменение статуса",
 };

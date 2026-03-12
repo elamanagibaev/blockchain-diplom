@@ -1,6 +1,6 @@
 # Project Documentation Index
 
-Welcome to **MediChain Records** — a comprehensive blockchain-based file registry system.
+Welcome to **BlockProof** — a comprehensive blockchain-based file registry system.
 
 ## Quick Links
 

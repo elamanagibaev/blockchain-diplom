@@ -18,7 +18,7 @@
 - **Smart contract**: Solidity
 - **Backend**: Python + FastAPI + SQLAlchemy + Alembic
 - **DB**: PostgreSQL
-- **Storage**: local storage abstraction (MinIO поднимается для демонстрации)
+- **Storage**: MinIO (Docker) или local storage — файлы off-chain, в блокчейне только hash и metadata
 - **Blockchain integration**: web3.py
 - **Frontend**: React + Vite + Axios + React Router
 - **Containers**: Docker + docker-compose (рекомендуется для запуска)

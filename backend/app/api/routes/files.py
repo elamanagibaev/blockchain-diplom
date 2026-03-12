@@ -1,7 +1,8 @@
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, Body
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -84,11 +85,22 @@ def list_files(
 def list_global(
     q: Optional[str] = None,
     status: Optional[str] = None,
+    owner_wallet: Optional[str] = None,
+    tx_hash: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Global patent/document registry - all documents from all users."""
-    objs = FileService(db).list_objects_global(q_search=q, status_filter=status)
+    """Global patent/document registry with search, filters and sorting."""
+    objs = FileService(db).list_objects_global(
+        q_search=q,
+        status_filter=status,
+        owner_wallet=owner_wallet,
+        tx_hash=tx_hash,
+        sort_by=sort_by or "created_at",
+        sort_order=sort_order or "desc",
+    )
     return [_to_read(o) for o in objs]
 
 
@@ -161,8 +173,18 @@ def download_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    url = FileService(db).get_download_url(current_user, obj_id)
-    return {"url": url}
+    """Stream file from storage (MinIO or local). Requires auth."""
+    try:
+        stream, filename, mime_type = FileService(db).get_download_stream(current_user, obj_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found in storage")
+    return StreamingResponse(
+        stream,
+        media_type=mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @router.get("/{obj_id}/history", response_model=DigitalObjectWithHistory)

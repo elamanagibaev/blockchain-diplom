@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MediChain Records — защищённая медицинская платформа</title>
+    <title>BlockProof — Blockchain platform for data verification</title>
     <style>
       /* ---------- Binance-inspired dark palette ---------- */
       :root {
@@ -1125,6 +1125,63 @@
         font-size: 18px;
         font-weight: 600;
         color: var(--color-text);
+      }
+
+      .certificate-page { max-width: 720px; margin: 0 auto; padding-bottom: 32px; }
+      .certificate-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .certificate-container {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        padding: 32px;
+        box-shadow: var(--shadow-card);
+      }
+      .certificate-header {
+        text-align: center;
+        margin-bottom: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .certificate-logo { font-size: 24px; font-weight: 700; color: var(--color-primary); letter-spacing: 0.05em; }
+      .certificate-subtitle { font-size: 12px; color: var(--color-muted); margin-top: 4px; }
+      .certificate-title { font-size: 18px; color: var(--color-text); margin: 16px 0 0; font-weight: 600; }
+      .certificate-status-block {
+        text-align: center;
+        padding: 20px;
+        border-radius: var(--radius-md);
+        margin-bottom: 24px;
+      }
+      .certificate-status-block--verified {
+        background: rgba(14, 203, 129, 0.15);
+        border: 1px solid rgba(14, 203, 129, 0.4);
+      }
+      .certificate-status-block--error {
+        background: rgba(246, 70, 93, 0.12);
+        border: 1px solid rgba(246, 70, 93, 0.4);
+      }
+      .certificate-status-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+      .certificate-status-block h2 { margin: 0 0 4px; font-size: 18px; }
+      .certificate-sections { display: grid; gap: 20px; }
+      .certificate-section h3 {
+        font-size: 13px;
+        color: var(--color-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 8px;
+      }
+      .certificate-section dl { margin: 0; }
+      .certificate-section dt { font-size: 11px; color: var(--color-muted); margin-top: 10px; }
+      .certificate-section dt:first-child { margin-top: 0; }
+      .certificate-section dd { margin: 2px 0 0; font-size: 14px; }
+      .certificate-hash { word-break: break-all; font-size: 12px; }
+      .certificate-timeline { margin-top: 8px; }
+      .certificate-footer {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--color-border);
+        text-align: center;
+        font-size: 12px;
+        color: var(--color-muted);
       }
 
       @media print {

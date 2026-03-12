@@ -14,7 +14,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
         <div className="auth-card">
           <div style={{ marginBottom: 16 }}>
             <div className="badge badge-soft-blue badge-pill" style={{ marginBottom: 8 }}>
-              MediChain Records · secure access
+              BlockProof — Blockchain platform for data verification
             </div>
             <h1 className="auth-header-title">{title}</h1>
             {subtitle && <div className="auth-header-subtitle">{subtitle}</div>}
@@ -23,7 +23,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
         </div>
       </main>
       <div className="auth-footer">
-        <span className="footer-brand">MediChain Records</span>
+        <span className="footer-brand">BlockProof</span>
         <span className="footer-project">Дипломный проект Агибаев Еламан и Кубышкин Константин</span>
       </div>
     </div>

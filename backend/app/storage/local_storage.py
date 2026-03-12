@@ -26,3 +26,11 @@ class LocalStorageBackend(StorageBackend):
     def get_url(self, storage_key: str) -> str:
         return f"file://{os.path.join(self.base_path, storage_key)}"
 
+    def get_stream(self, storage_key: str):
+        path = os.path.join(self.base_path, storage_key)
+        if not os.path.exists(path):
+            raise FileNotFoundError(path)
+        with open(path, "rb") as f:
+            while chunk := f.read(32 * 1024):
+                yield chunk
+

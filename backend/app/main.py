@@ -37,4 +37,3 @@ app.include_router(verification_router, prefix=settings.API_V1_STR)
 app.include_router(blockchain_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
-

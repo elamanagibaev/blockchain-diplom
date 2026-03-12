@@ -30,14 +30,19 @@ async def verify_file(
             sha256_hash=sha,
             sha256_stored=None,
         )
+    owner_wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
     return FileVerificationResult(
         is_verified=True,
         digital_object_id=obj.id,
         registered_at=obj.created_at,
         owner_id=obj.owner_id,
+        owner_wallet_address=owner_wallet,
         file_name=obj.file_name,
         description=obj.description,
         transaction_hash=obj.blockchain_tx_hash,
+        blockchain_registered_at=obj.blockchain_registered_at,
+        blockchain_object_id=str(obj.blockchain_object_id) if obj.blockchain_object_id else None,
+        status=obj.status,
         integrity_status="OK",
         sha256_hash=sha,
         sha256_stored=obj.sha256_hash,
@@ -79,14 +84,19 @@ def verify_hash(
             sha256_hash=sha256,
             sha256_stored=None,
         )
+    owner_wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
     return FileVerificationResult(
         is_verified=True,
         digital_object_id=obj.id,
         registered_at=obj.created_at,
         owner_id=obj.owner_id,
+        owner_wallet_address=owner_wallet,
         file_name=obj.file_name,
         description=obj.description,
         transaction_hash=obj.blockchain_tx_hash,
+        blockchain_registered_at=obj.blockchain_registered_at,
+        blockchain_object_id=str(obj.blockchain_object_id) if obj.blockchain_object_id else None,
+        status=obj.status,
         integrity_status="OK",
         sha256_hash=sha256,
         sha256_stored=obj.sha256_hash,

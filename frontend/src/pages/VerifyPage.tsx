@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
@@ -144,14 +145,24 @@ export const VerifyPage: React.FC = () => {
 
       {result && (
         <div className="card">
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
             <div>
               <div className="label">Результат криптографической проверки</div>
               <div className="muted">
-                {result.is_verified ? "Документ подтверждён системой MediChain Records." : "Документ не найден или хэш не соответствует зарегистрированным данным."}
+                {result.is_verified ? "Документ подтверждён системой BlockProof." : "Документ не найден или хэш не соответствует зарегистрированным данным."}
               </div>
             </div>
-            <StatusBadge status={result.is_verified ? "VERIFIED" : "NOT_VERIFIED"} />
+            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+              <StatusBadge status={result.is_verified ? "VERIFIED" : "NOT_VERIFIED"} />
+              {result.is_verified && result.sha256_hash && (
+                <Link
+                  to={`/verify/hash/${result.sha256_hash}`}
+                  className="btn btn-outline btn-sm"
+                >
+                  Сертификат
+                </Link>
+              )}
+            </div>
           </div>
 
           <div className="verify-result-grid" style={{ marginTop: 8 }}>
