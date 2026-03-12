@@ -5,8 +5,8 @@ import { useNotification } from "../context/NotificationContext";
 import { MetricCard } from "../components/MetricCard";
 import { Spinner } from "../components/Spinner";
 import { FileTable, FileRow } from "../components/FileTable";
+import { ActivityList } from "../components/ActivityList";
 import { api } from "../api/client";
-import { actionLabels } from "../components/ActionHistoryTimeline";
 
 type Metrics = {
   total: number;
@@ -24,6 +24,16 @@ type ActivityItem = {
   details?: string | null;
 };
 
+type BlockchainEvent = {
+  id: string;
+  action_type: string;
+  document_file_name: string | null;
+  timestamp: string;
+  tx_hash: string;
+  from_wallet: string | null;
+  to_wallet: string | null;
+};
+
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
@@ -31,14 +41,17 @@ export const DashboardPage: React.FC = () => {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [recent, setRecent] = useState<FileRow[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [blockchainEvents, setBlockchainEvents] = useState<BlockchainEvent[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [metricsRes, filesRes, activityRes] = await Promise.all([
+      const [metricsRes, filesRes, activityRes, eventsRes] = await Promise.all([
         api.get<Metrics>("/files/metrics"),
         api.get<FileRow[]>("/files"),
         api.get<{ actions: ActivityItem[] }>("/files/activity/recent?limit=8"),
+        api.get<BlockchainEvent[]>("/blockchain/events").then((r) => r.data.slice(0, 5)).catch(() => []),
       ]);
       setMetrics(metricsRes.data);
       const sorted = [...filesRes.data].sort(
@@ -46,10 +59,15 @@ export const DashboardPage: React.FC = () => {
       );
       setRecent(sorted.slice(0, 5));
       setActivity(activityRes.data.actions || []);
+      setPendingCount(
+        Array.isArray(filesRes.data) ? filesRes.data.filter((f: FileRow) => f.status === "PENDING_APPROVAL").length : 0
+      );
+      setBlockchainEvents(Array.isArray(eventsRes) ? eventsRes : []);
     } catch {
       setMetrics(null);
       setRecent([]);
       setActivity([]);
+      setBlockchainEvents([]);
       notify("error", "Не удалось загрузить данные");
     } finally {
       setLoading(false);
@@ -66,19 +84,19 @@ export const DashboardPage: React.FC = () => {
       : 0;
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
+      {/* Hero */}
       <div className="dashboard-hero">
-        <div className="card card-soft dashboard-hero-main">
+        <div className="card dashboard-hero-main">
           <div className="dashboard-hero-main-inner">
-            <div className="badge badge-soft-green badge-pill">Защита медицинских записей</div>
-            <h1 style={{ margin: "4px 0 2px", fontSize: 26, fontWeight: 650 }}>
-              Добро пожаловать, {user?.email || "пользователь"}
+            <div className="badge badge-accent badge-pill">Blockchain-платформа</div>
+            <h1 className="dashboard-hero-title">
+              Добро пожаловать, {user?.email?.split("@")[0] || "пользователь"}
             </h1>
-            <div className="muted">
-              Защищённая платформа для загрузки, хранения и проверки подлинности медицинских документов.
-              Хэши фиксируются в блокчейне — как в современной клинике.
-            </div>
-            <div className="dashboard-hero-kpi">
+            <p className="dashboard-hero-desc">
+              Защищённая платформа для регистрации и хранения документов. Хэши фиксируются в блокчейне.
+            </p>
+            <div className="dashboard-hero-actions">
               <Link to="/upload" className="btn btn-primary">
                 Загрузить документ
               </Link>
@@ -88,49 +106,23 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <div className="card dashboard-hero-secondary">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <div>
-              <div className="label">Статус платформы</div>
-              <div className="muted">Бэкенд и блокчейн-узел активны для демонстрации диплома.</div>
-            </div>
-            <button className="btn btn-muted btn-sm" onClick={() => void load()}>
-              Обновить
-            </button>
-          </div>
-          {loading ? (
-            <div className="text-center" style={{ padding: "12px 0" }}>
-              <Spinner size={28} />
-            </div>
-          ) : metrics ? (
-            <div className="grid" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
-              <MetricCard title="Всего документов" value={metrics.total} />
-              <MetricCard title="Зарегистрировано on-chain" value={metrics.on_chain} color="var(--color-accent)" />
-              <MetricCard title="Успешных проверок" value={metrics.verified} color="var(--color-success)" />
-              <MetricCard title="Ошибок проверки" value={metrics.invalid} color="var(--color-danger)" />
-            </div>
-          ) : (
-            <div className="bad">Не удалось загрузить статистику</div>
-          )}
-          {metrics && (
-            <div className="muted" style={{ fontSize: 12 }}>
-              Ожидают регистрации в блокчейне:{" "}
-              <strong>{pendingOnChain}</strong>
-            </div>
-          )}
-        </div>
       </div>
 
+      {/* Summary cards */}
+      <div className="dashboard-stats-grid">
+        <MetricCard title="Всего документов" value={loading ? "—" : (metrics?.total ?? 0)} />
+        <MetricCard title="On-chain" value={loading ? "—" : (metrics?.on_chain ?? 0)} color="var(--color-success)" />
+        <MetricCard title="На рассмотрении" value={loading ? "—" : pendingCount} color="var(--color-warning)" />
+        <MetricCard title="Ожидают регистрации" value={loading ? "—" : pendingOnChain} color="var(--color-muted)" />
+      </div>
+
+      {/* Wallet */}
       {user?.wallet_address && (
-        <div className="card card-soft" style={{ marginBottom: 16 }}>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <div className="card dashboard-wallet-card">
+          <div className="dashboard-wallet-inner">
             <div>
-              <div className="label">Ваш Blockchain Wallet</div>
-              <code style={{ fontSize: 13 }}>{user.wallet_address}</code>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {user.document_count ?? 0} документов · {user.on_chain_count ?? 0} в блокчейне
-              </div>
+              <div className="label">Ваш Wallet</div>
+              <code className="wallet-address">{user.wallet_address}</code>
             </div>
             <Link to="/profile" className="btn btn-outline btn-sm">
               Профиль
@@ -139,117 +131,101 @@ export const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      <div className="card">
-        <div className="label">Наши услуги</div>
-        <div className="services-grid" style={{ marginTop: 12 }}>
-          <Link to="/upload" className="service-card">
-            <div className="service-card-icon">↑</div>
-            <h3 className="service-card-title">Загрузка документов</h3>
-            <p className="service-card-desc">Регистрация медицинских файлов off-chain и фиксация хэша</p>
-          </Link>
-          <Link to="/verify" className="service-card">
-            <div className="service-card-icon">✓</div>
-            <h3 className="service-card-title">Проверка подлинности</h3>
-            <p className="service-card-desc">Верификация документа по файлу или SHA-256 хэшу</p>
-          </Link>
-          <Link to="/files" className="service-card">
-            <div className="service-card-icon">📁</div>
-            <h3 className="service-card-title">Мои патенты</h3>
-            <p className="service-card-desc">Просмотр, статусы и регистрация в блокчейне</p>
-          </Link>
-          <Link to="/global" className="service-card">
-            <div className="service-card-icon">🌐</div>
-            <h3 className="service-card-title">Общая база патентов</h3>
-            <p className="service-card-desc">Все документы всех пользователей в реестре</p>
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
-        <div className="card">
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-            <div>
-              <div className="label">Последние документы</div>
-              <div className="muted">
-                5 последних загруженных медицинских файлов с актуальными статусами целостности.
-              </div>
-            </div>
-            <Link to="/files" className="btn btn-outline btn-sm">
-              Открыть все
-            </Link>
-          </div>
-          {loading ? (
-            <div className="text-center" style={{ padding: "12px 0" }}>
-              <Spinner size={24} />
-            </div>
-          ) : recent.length ? (
-            <FileTable items={recent} />
-          ) : (
-            <div className="muted">Пока нет загруженных документов.</div>
-          )}
-        </div>
-
-        <div className="card">
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-            <div>
-              <div className="label">Последние действия</div>
-              <div className="muted">Аудит всех операций с документами</div>
-            </div>
+      {/* Main content: Recent docs + Activity + Blockchain events */}
+      <div className="dashboard-main-grid">
+        <div className="card dashboard-section">
+          <div className="section-header">
+            <h3 className="section-title">Последние документы</h3>
             <Link to="/files" className="btn btn-outline btn-sm">
               Все документы
             </Link>
           </div>
           {loading ? (
-            <div className="text-center" style={{ padding: "12px 0" }}>
+            <div className="section-loading">
               <Spinner size={24} />
             </div>
-          ) : activity.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {activity.map((a) => (
-                <div key={a.id} className="timeline-item" style={{ padding: "10px 0", marginLeft: 8 }}>
-                  <div className="timeline-item-content">
-                    <div className="timeline-item-type">
-                      {actionLabels[a.action_type] || a.action_type}
-                      {" · "}
-                      <Link to={`/files/${a.object_id}`} style={{ color: "var(--color-primary)" }}>
-                        {a.file_name}
-                      </Link>
-                    </div>
-                    <div className="timeline-item-time">
-                      {new Date(a.performed_at).toLocaleString("ru-RU")}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          ) : recent.length ? (
+            <div className="table-scroll">
+              <FileTable items={recent} />
             </div>
           ) : (
-            <div className="timeline-empty">Нет действий.</div>
+            <div className="section-empty muted">Пока нет документов</div>
           )}
         </div>
 
-        <div className="card">
-          <div className="label">Краткое объяснение безопасности</div>
-          <ul className="page-sidebar-list" style={{ marginTop: 6 }}>
-            <li>
-              <span className="page-sidebar-dot" />
-              Файлы хранятся off-chain в защищённом хранилище (MinIO/локальное S3-совместимое хранилище).
-            </li>
-            <li>
-              <span className="page-sidebar-dot" />
-              В блокчейне фиксируются только SHA-256 хэши, владелец и время регистрации — без медицинских данных.
-            </li>
-            <li>
-              <span className="page-sidebar-dot" />
-              Проверка документа пересчитывает хэш и сравнивает его с неизменяемой записью в реестре.
-            </li>
-          </ul>
-          <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-            Такой подход демонстрирует разделение on-chain / off-chain и обеспечивает доказуемую целостность
-            медицинских документов без раскрытия их содержания.
+        <div className="card dashboard-section">
+          <div className="section-header">
+            <h3 className="section-title">Последние действия</h3>
+            <Link to="/audit" className="btn btn-outline btn-sm">
+              Журнал
+            </Link>
           </div>
+          {loading ? (
+            <div className="section-loading">
+              <Spinner size={24} />
+            </div>
+          ) : (
+            <ActivityList items={activity} emptyMessage="Нет действий" />
+          )}
+        </div>
+      </div>
+
+      {/* Blockchain events */}
+      {blockchainEvents.length > 0 && (
+        <div className="card dashboard-section">
+          <div className="section-header">
+            <h3 className="section-title">События блокчейна</h3>
+            <Link to="/blockchain-journal" className="btn btn-outline btn-sm">
+              Журнал блокчейна
+            </Link>
+          </div>
+          <div className="activity-list">
+            {blockchainEvents.map((e) => (
+              <div key={e.id} className="activity-list-item">
+                <span className="activity-list-icon">
+                  {e.action_type === "REGISTER" ? "📝" : "↔"}
+                </span>
+                <div className="activity-list-content">
+                  <span className="activity-list-type">
+                    {e.action_type === "REGISTER" ? "Регистрация" : "Передача"}: {e.document_file_name || "—"}
+                  </span>
+                  <span className="activity-list-time">
+                    {new Date(e.timestamp).toLocaleString("ru-RU")}
+                    {e.tx_hash && ` · ${e.tx_hash.slice(0, 10)}…`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick actions / Services */}
+      <div className="card dashboard-section">
+        <h3 className="section-title" style={{ marginBottom: 16 }}>Быстрые действия</h3>
+        <div className="services-grid">
+          <Link to="/upload" className="service-card">
+            <div className="service-card-icon">↑</div>
+            <h4 className="service-card-title">Загрузка</h4>
+            <p className="service-card-desc">Регистрация документа</p>
+          </Link>
+          <Link to="/verify" className="service-card">
+            <div className="service-card-icon">✓</div>
+            <h4 className="service-card-title">Верификация</h4>
+            <p className="service-card-desc">Проверка подлинности</p>
+          </Link>
+          <Link to="/files" className="service-card">
+            <div className="service-card-icon">📁</div>
+            <h4 className="service-card-title">Мои патенты</h4>
+            <p className="service-card-desc">Управление документами</p>
+          </Link>
+          <Link to="/global" className="service-card">
+            <div className="service-card-icon">🌐</div>
+            <h4 className="service-card-title">Общая база</h4>
+            <p className="service-card-desc">Глобальный реестр</p>
+          </Link>
         </div>
       </div>
     </div>
   );
 };
-
