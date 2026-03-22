@@ -7,6 +7,7 @@ import { Spinner } from "../components/Spinner";
 type DocRow = {
   id: string;
   file_name: string;
+  description?: string | null;
   title?: string | null;
   status: string;
   created_at: string;
@@ -31,6 +32,14 @@ function shortWallet(addr: string | null | undefined): string {
 
 type ActionKind = "sale" | "reject" | "review" | "registered";
 
+function documentListLabel(r: DocRow): string {
+  const d = r.description?.trim();
+  if (d) return d;
+  const t = r.title?.trim();
+  if (t) return t;
+  return r.file_name;
+}
+
 function mapRegistryAction(status: string, blockchainTx: string | null | undefined): { label: string; kind: ActionKind } {
   if (status === "TRANSFERRED") {
     return { label: "Продажа", kind: "sale" };
@@ -43,13 +52,6 @@ function mapRegistryAction(status: string, blockchainTx: string | null | undefin
   }
   return { label: "Рассмотрение", kind: "review" };
 }
-
-const actionBadgeStyle: Record<ActionKind, React.CSSProperties> = {
-  sale: { background: "#2563eb", color: "#fff" },
-  reject: { background: "#dc2626", color: "#fff" },
-  review: { background: "#ca8a04", color: "#fff" },
-  registered: { background: "#16a34a", color: "#fff" },
-};
 
 function WalletCell({ address }: { address: string | null | undefined }) {
   if (!address) {
@@ -153,7 +155,6 @@ export const GlobalRegistryPage: React.FC = () => {
           <div style={{ minWidth: 160 }}>
             <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Все статусы</option>
-              <option value="UPLOADED">Загружен</option>
               <option value="REGISTERED">В реестре (вне сети)</option>
               <option value="PENDING_APPROVAL">На рассмотрении</option>
               <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
@@ -214,11 +215,12 @@ export const GlobalRegistryPage: React.FC = () => {
                 {items.map((r) => {
                   const action = mapRegistryAction(r.status, r.blockchain_tx_hash);
                   const buyerWallet = r.last_transfer_to_wallet || null;
+                  const docLabel = documentListLabel(r);
                   return (
                     <tr key={r.id}>
                       <td>
-                        <Link to={`/files/${r.id}`} style={{ fontWeight: 500 }}>
-                          {r.file_name}
+                        <Link to={`/files/${r.id}`} className="registry-doc-link" title={docLabel}>
+                          {docLabel}
                         </Link>
                       </td>
                       <td>
@@ -226,17 +228,7 @@ export const GlobalRegistryPage: React.FC = () => {
                       </td>
                       <td>{buyerWallet ? <WalletCell address={buyerWallet} /> : <span className="muted">—</span>}</td>
                       <td>
-                        <span
-                          className="registry-action-badge"
-                          style={{
-                            ...actionBadgeStyle[action.kind],
-                            padding: "4px 10px",
-                            borderRadius: 8,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            display: "inline-block",
-                          }}
-                        >
+                        <span className={`soft-badge soft-badge--${action.kind}`}>
                           {action.label}
                         </span>
                       </td>

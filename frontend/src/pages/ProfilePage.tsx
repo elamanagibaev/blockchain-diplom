@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
@@ -18,7 +17,6 @@ type ProfileData = {
 };
 
 export const ProfilePage: React.FC = () => {
-  const { user: authUser } = useAuth();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -119,7 +117,7 @@ export const ProfilePage: React.FC = () => {
             Мои патенты / документы
           </Link>
           <Link to="/global" className="btn btn-outline btn-sm">
-            Общая база патентов
+            Реестр
           </Link>
         </div>
       </div>

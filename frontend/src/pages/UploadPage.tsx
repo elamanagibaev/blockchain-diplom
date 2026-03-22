@@ -34,11 +34,16 @@ export const UploadPage: React.FC = () => {
       setError("Выберите файл");
       return;
     }
+    const trimmedDesc = description.trim();
+    if (!trimmedDesc) {
+      setError("Введите название документа");
+      return;
+    }
     setLoading(true);
     try {
       const form = new FormData();
       form.append("upload_file", file);
-      if (description) form.append("description", description);
+      form.append("description", trimmedDesc);
       const res = await api.post<UploadResult>("/files/upload", form);
       setResult(res.data);
       notify("success", "Документ загружен, хэш зафиксирован во внутреннем реестре.");
@@ -62,7 +67,7 @@ export const UploadPage: React.FC = () => {
     <div className="page">
       <PageHeader
         title="Загрузка патентного документа"
-        subtitle="PDF, изображение или текстовый файл. Платформа вычислит контрольную сумму и сохранит запись в реестре."
+        subtitle="PDF, DOC, DOCX, изображение или текстовый файл. Укажите название документа — оно будет отображаться в реестре."
       />
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
@@ -72,18 +77,24 @@ export const UploadPage: React.FC = () => {
           </div>
           <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
             <div>
-              <div className="label">Файл (PDF, изображения, текст)</div>
+              <div className="label">Файл</div>
               <input
                 className="input"
                 type="file"
-                accept="application/pdf,image/*,text/*"
+                accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*,text/*,.pdf,.doc,.docx"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                Поддерживаемые форматы: PDF, DOC, DOCX, изображения, текст.
+              </div>
             </div>
             <div>
-              <div className="label">Описание (номер заявки, вид объекта ИС, контекст)</div>
+              <div className="label">
+                Название документа <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(обязательно)</span>
+              </div>
               <textarea
                 className="input"
+                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Например: заявка на изобретение №…, «Способ…», дата подачи…"
@@ -142,12 +153,15 @@ export const UploadPage: React.FC = () => {
                 </Link>
               </div>
             </div>
-            <StatusBadge status={result.status} />
+            <StatusBadge labelPreset="patents" status={result.status} />
           </div>
           <div className="grid" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr)" }}>
             <div>
               <div>
                 <span className="muted">ID объекта:</span> <code>{result.id}</code>
+              </div>
+              <div>
+                <span className="muted">Название документа:</span> {result.description || "—"}
               </div>
               <div>
                 <span className="muted">Имя файла:</span> {result.file_name}

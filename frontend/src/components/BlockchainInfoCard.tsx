@@ -1,4 +1,5 @@
 import React from "react";
+import { getExplorerTxUrl } from "../utils/blockExplorer";
 
 export type BlockchainInfoCardProps = {
   txHash?: string | null;
@@ -37,7 +38,7 @@ export const BlockchainInfoCard: React.FC<BlockchainInfoCardProps> = ({ txHash, 
       )}
       {txHash && (
         <a
-          href={`https://explorer.local/tx/${txHash}`}
+          href={getExplorerTxUrl(txHash)}
           target="_blank"
           rel="noreferrer"
           className="btn btn-outline btn-sm"

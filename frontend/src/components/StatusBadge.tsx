@@ -2,25 +2,42 @@ import React from "react";
 
 export type StatusBadgeProps = {
   status: string;
-  /** Переопределение отображаемого текста (по ТЗ: Uploaded, Pending On-Chain, Registered, Verified, Rejected) */
+  /** Переопределение отображаемого текста */
   label?: string;
+  /**
+   * «patents» — подписи для списка «Мои патенты» (Черновик, На проверке, Мой, Получен).
+   * Остальные страницы — «default».
+   */
+  labelPreset?: "default" | "patents";
 };
 
-const statusColors: Record<string, string> = {
-  UPLOADED: "--color-primary",
-  REGISTERED: "--color-primary",
-  PENDING_APPROVAL: "#f59e0b",
-  REGISTERED_ON_CHAIN: "--color-accent",
-  PENDING_ON_CHAIN: "--color-primary",
-  VERIFIED: "--color-success",
-  NOT_VERIFIED: "--color-danger",
-  TRANSFERRED: "--color-accent",
-  DRAFT: "#9ca3af",
-  REJECTED: "--color-danger",
-  OK: "--color-success",
-  NOT_FOUND: "--color-danger",
-  INVALID_HASH: "--color-danger",
-};
+export type SoftBadgeVariant = "registered" | "sale" | "reject" | "review" | "muted";
+
+/** Соответствует модификаторам `.soft-badge--*` в index.html (как в «Реестре»). */
+export function statusToSoftVariant(status: string): SoftBadgeVariant {
+  switch (status) {
+    case "REGISTERED_ON_CHAIN":
+    case "VERIFIED":
+    case "OK":
+      return "registered";
+    case "TRANSFERRED":
+      return "sale";
+    case "REJECTED":
+    case "NOT_VERIFIED":
+    case "INVALID_HASH":
+      return "reject";
+    case "PENDING_APPROVAL":
+    case "PENDING_ON_CHAIN":
+      return "review";
+    case "UPLOADED":
+    case "REGISTERED":
+      return "muted";
+    case "NOT_FOUND":
+    case "DRAFT":
+    default:
+      return "muted";
+  }
+}
 
 const statusLabelsRu: Record<string, string> = {
   UPLOADED: "Загружен",
@@ -38,22 +55,23 @@ const statusLabelsRu: Record<string, string> = {
   INVALID_HASH: "Неверный хэш",
 };
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label }) => {
-  const bg = statusColors[status] || "--color-muted";
-  const text = label ?? statusLabelsRu[status] ?? status.replace(/_/g, " ");
-  return (
-    <span
-      className="status-badge"
-      style={{
-        background: `var(${bg})`,
-        color: "white",
-        padding: "3px 8px",
-        borderRadius: "8px",
-        fontSize: "12px",
-        textTransform: "uppercase",
-      }}
-    >
-      {text}
-    </span>
-  );
+/** Подписи для вкладки «Мои патенты» + карточка документа / загрузка в том же контексте. */
+const patentLabelsRu: Partial<Record<string, string>> = {
+  UPLOADED: "Черновик",
+  REGISTERED: "Черновик",
+  PENDING_APPROVAL: "На проверке",
+  PENDING_ON_CHAIN: "На проверке",
+  REGISTERED_ON_CHAIN: "Мой",
+  TRANSFERRED: "Получен",
+};
+
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label, labelPreset = "default" }) => {
+  const variant = statusToSoftVariant(status);
+  const text =
+    label ??
+    (labelPreset === "patents" && patentLabelsRu[status] != null
+      ? patentLabelsRu[status]!
+      : statusLabelsRu[status]) ??
+    status.replace(/_/g, " ");
+  return <span className={`soft-badge soft-badge--${variant}`}>{text}</span>;
 };

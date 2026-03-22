@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
@@ -28,6 +28,7 @@ type Data = {
 
 export const FileDetailPage: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,7 +95,7 @@ export const FileDetailPage: React.FC = () => {
     try {
       await api.post(`/files/${id}/submit-for-registration`);
       await load();
-      notify("success", "Заявка на регистрацию отправлена на рассмотрение администратору.");
+      notify("success", "Документ отправлен на рассмотрение и отображается в общем реестре.");
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Ошибка отправки заявки";
       notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
@@ -106,11 +107,22 @@ export const FileDetailPage: React.FC = () => {
   const transferDocument = async () => {
     if (!id || !transferWallet.trim()) return;
     setTransferring(true);
+    setError(null);
     try {
       await api.post(`/files/${id}/transfer`, { to_wallet_address: transferWallet.trim() });
       setTransferWallet("");
-      await load();
       notify("success", "Документ передан.");
+      try {
+        const res = await api.get<Data>(`/files/${id}`);
+        setData(res.data);
+      } catch (reloadErr: any) {
+        if (reloadErr?.response?.status === 403) {
+          navigate("/files");
+        } else {
+          const msg = reloadErr?.response?.data?.detail || "Ошибка обновления данных";
+          setError(typeof msg === "string" ? msg : "Ошибка обновления данных");
+        }
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Ошибка передачи";
       notify("error", typeof msg === "string" ? msg : "Ошибка передачи");
@@ -149,21 +161,25 @@ export const FileDetailPage: React.FC = () => {
   const canSubmit = !onChainRegistered && ["UPLOADED", "REGISTERED", "REJECTED"].includes(data.status);
   const isOwner = user?.id === data.owner_id || user?.role === "admin";
 
+  const docDisplayName =
+    data.description?.trim() || data.title?.trim() || data.file_name;
+
   return (
     <div className="page">
       <PageHeader
         title="Патентный документ"
-        subtitle={data.title || data.file_name}
+        subtitle={docDisplayName}
         backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {onChainRegistered ? null : canSubmit ? (
               <button
-                className="btn btn-primary"
+                type="button"
+                className="btn-review"
                 onClick={() => void submitForRegistration()}
                 disabled={submitting}
               >
-                {submitting ? "Отправка…" : "Подать на регистрацию"}
+                {submitting ? "Отправка…" : "Рассмотреть"}
               </button>
             ) : data.status === "PENDING_APPROVAL" ? (
               <span className="muted" style={{ fontSize: 14 }}>Ожидает одобрения администратора</span>
@@ -174,6 +190,11 @@ export const FileDetailPage: React.FC = () => {
           </div>
         }
       />
+      {!data.description?.trim() && (
+        <p className="file-row-desc-hint" style={{ marginTop: 6, marginBottom: 14 }}>
+          Добавьте название документа
+        </p>
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
         <div className="card">
@@ -199,6 +220,7 @@ export const FileDetailPage: React.FC = () => {
             <div>
               <span className="muted">Статус:</span>{" "}
               <StatusBadge
+                labelPreset="patents"
                 status={
                   data.status === "REGISTERED" && !data.blockchain_tx_hash
                     ? "UPLOADED"
@@ -251,24 +273,6 @@ export const FileDetailPage: React.FC = () => {
             )}
             <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
               При регистрации в блокчейне запись привязывается к кошельку правообладателя.
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.1rem" }}>Целостность</h2>
-          <div style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-              <span className="muted">SHA-256 хэш:</span> <code style={{ wordBreak: "break-all" }}>{data.sha256_hash}</code>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => navigator.clipboard.writeText(data.sha256_hash)}
-              >
-                Скопировать
-              </button>
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Любое изменение файла меняет хэш и перестаёт совпадать с записью в блокчейне.
             </div>
           </div>
         </div>

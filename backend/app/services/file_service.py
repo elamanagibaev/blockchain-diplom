@@ -25,17 +25,37 @@ logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB (demo safety)
 ALLOWED_MIME_PREFIXES = ("application/pdf", "image/", "text/")
+ALLOWED_MIME_EXACT = frozenset(
+    {
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+)
 
 
 def _infer_document_type(mime: str, filename: str) -> str:
     """Infer document type for display."""
-    if "pdf" in mime or filename.lower().endswith(".pdf"):
+    fn = filename.lower()
+    if "pdf" in mime or fn.endswith(".pdf"):
+        return "document"
+    if mime in ALLOWED_MIME_EXACT or fn.endswith(".doc") or fn.endswith(".docx"):
         return "document"
     if mime.startswith("image/"):
         return "image"
     if mime.startswith("text/"):
         return "text"
     return "file"
+
+
+def _normalize_mime_for_upload(mime: str, filename: str) -> str:
+    """Браузеры часто шлют application/octet-stream для Office-файлов."""
+    fn = filename.lower()
+    if mime == "application/octet-stream":
+        if fn.endswith(".docx"):
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if fn.endswith(".doc"):
+            return "application/msword"
+    return mime
 
 
 def _safe_filename(name: str) -> str:
@@ -65,19 +85,29 @@ class FileService:
         self.storage = get_storage_backend()
 
     def _validate_mime(self, mime: str) -> None:
+        if mime in ALLOWED_MIME_EXACT:
+            return
         if not any(mime.startswith(p) for p in ALLOWED_MIME_PREFIXES):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File type not allowed: {mime}",
             )
 
-    def register_file(self, user: User, file: UploadFile, description: str | None) -> DigitalObject:
+    def register_file(self, user: User, file: UploadFile, description: str) -> DigitalObject:
+        desc = (description or "").strip()
+        if not desc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Введите название документа",
+            )
+
         raw = file.file.read()
         if len(raw) > MAX_FILE_SIZE_BYTES:
             raise HTTPException(status_code=400, detail="File too large (max 10MB)")
 
         filename = _safe_filename(file.filename or "file")
         mime = file.content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        mime = _normalize_mime_for_upload(mime, filename)
         self._validate_mime(mime)
 
         sha = sha256_file(BytesIO(raw))
@@ -96,7 +126,7 @@ class FileService:
         storage_key = local_storage.save(BytesIO(raw), filename)
 
         doc_type = _infer_document_type(mime, filename)
-        title = description or filename
+        title = desc
 
         obj = DigitalObject(
             owner_id=user.id,
@@ -107,7 +137,7 @@ class FileService:
             storage_key=storage_key,
             storage_backend="local",
             sha256_hash=sha,
-            description=description,
+            description=desc,
             document_type=doc_type,
             owner_wallet_address=user.wallet_address,
             visibility="public",
@@ -119,7 +149,7 @@ class FileService:
         return obj
 
     def list_objects(self, user: User) -> list[DigitalObject]:
-        q = self.db.query(DigitalObject)
+        q = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
         if user.role != "admin":
             q = q.filter(DigitalObject.owner_id == user.id)
         return q.order_by(DigitalObject.created_at.desc()).all()
@@ -135,6 +165,8 @@ class FileService:
     ) -> list[DigitalObject]:
         """List all documents for global patent registry with search and filters."""
         query = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
+        # До нажатия «Рассмотреть» документ только загружен (UPLOADED) и не виден в общем реестре
+        query = query.filter(DigitalObject.status != "UPLOADED")
         if q_search:
             ql = q_search.lower()
             query = query.filter(
@@ -142,6 +174,7 @@ class FileService:
                     DigitalObject.file_name.ilike(f"%{ql}%"),
                     DigitalObject.sha256_hash.ilike(f"%{ql}%"),
                     DigitalObject.title.ilike(f"%{ql}%"),
+                    DigitalObject.description.ilike(f"%{ql}%"),
                 )
             )
         if status_filter:
@@ -197,7 +230,12 @@ class FileService:
 
     def get_object(self, user: User, obj_id, require_owner: bool = False) -> DigitalObject:
         """Get object by id. If require_owner=False, any authenticated user can view (for global registry)."""
-        obj = self.db.query(DigitalObject).filter(DigitalObject.id == obj_id).first()
+        obj = (
+            self.db.query(DigitalObject)
+            .options(joinedload(DigitalObject.owner))
+            .filter(DigitalObject.id == obj_id)
+            .first()
+        )
         if not obj:
             raise HTTPException(status_code=404, detail="Object not found")
         if require_owner and user.role != "admin" and obj.owner_id != user.id:

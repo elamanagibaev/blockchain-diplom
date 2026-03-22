@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { Spinner } from "../components/Spinner";
+import { getExplorerTxUrl } from "../utils/blockExplorer";
 
 type CertData = {
   is_verified: boolean;
@@ -19,11 +20,6 @@ type CertData = {
   blockchain_object_id?: string | null;
   status?: string | null;
   integrity_status: string;
-};
-
-const getExplorerUrl = (txHash: string) => {
-  const base = import.meta.env.VITE_BLOCK_EXPLORER_URL || "https://explorer.local";
-  return `${base}/tx/${txHash}`;
 };
 
 type CertificatePageProps = { mode?: "hash" | "id" };
@@ -212,7 +208,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
                       Копировать
                     </button>
                     <a
-                      href={getExplorerUrl(data.transaction_hash)}
+                      href={getExplorerTxUrl(data.transaction_hash)}
                       target="_blank"
                       rel="noreferrer"
                       className="btn btn-outline btn-sm"

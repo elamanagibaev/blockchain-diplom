@@ -26,7 +26,10 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    obj = FileService(db).register_file(current_user, upload_file, description)
+    desc = (description or "").strip()
+    if not desc:
+        raise HTTPException(status_code=422, detail="Введите название документа")
+    obj = FileService(db).register_file(current_user, upload_file, desc)
     return DigitalObjectCreateResponse(
         id=obj.id,
         file_name=obj.file_name,
