@@ -32,7 +32,7 @@ export const VerifyPage: React.FC = () => {
     setError(null);
     setResult(null);
     if (!file && !hash) {
-      setError("Выберите файл или введите SHA-256 хэш");
+      setError("Выберите файл или введите SHA-256");
       return;
     }
     setLoading(true);
@@ -58,86 +58,80 @@ export const VerifyPage: React.FC = () => {
   const integrityLabel = (status: string) => {
     switch (status) {
       case "OK":
-        return "Хэш совпадает с записью в блокчейне / базе данных.";
+        return "Хэш совпадает с записью в реестре.";
       case "NOT_FOUND":
-        return "Документ с таким хэшем не зарегистрирован в системе.";
+        return "Документ с таким хэшем не найден.";
       case "INVALID_HASH":
-        return "Некорректный формат SHA-256 хэша.";
+        return "Некорректный формат SHA-256 (ожидается 64 шестнадцатеричных символа).";
       default:
-        return "Служебный статус проверки целостности.";
+        return "Статус проверки целостности.";
     }
   };
 
   return (
     <div className="page">
       <PageHeader
-        title="Проверка подлинности медицинского документа"
-        subtitle="Загрузите файл или введите его SHA-256 хэш, чтобы получить криптографическое доказательство целостности."
+        title="Верификация патентного документа"
+        subtitle="Загрузите файл или укажите SHA-256, чтобы сравнить хэш с реестром BlockProof."
       />
 
       <div className="verify-layout">
         <div className="card">
           <div className="badge badge-soft-blue badge-pill" style={{ marginBottom: 10 }}>
-            Central feature · Verification
+            Верификация
           </div>
           <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
             <div>
               <div className="label">Файл для проверки</div>
-              <input
-                className="input"
-                type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
+              <input className="input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </div>
             <div style={{ textAlign: "center", margin: "4px 0", fontSize: 12 }} className="muted">
-              или введите известный SHA-256 хэш
+              или укажите известный SHA-256
             </div>
             <div>
-              <div className="label">SHA-256 хэш документа</div>
+              <div className="label">SHA-256 (64 символа)</div>
               <input
                 className="input"
                 value={hash}
                 onChange={(e) => setHash(e.target.value.trim())}
-                placeholder="64-значный SHA-256 хэш"
+                placeholder="Вставьте полный хэш SHA-256"
               />
             </div>
             {error && <div className="bad">{error}</div>}
             <button className="btn btn-primary" type="submit" disabled={loading}>
               {loading ? (
                 <>
-                  <Spinner size={16} /> Проверка...
+                  <Spinner size={16} /> Проверка…
                 </>
               ) : (
-                "Проверить подлинность"
+                "Верифицировать"
               )}
             </button>
             <div className="muted" style={{ fontSize: 12 }}>
-              Система не отправляет файл в блокчейн: для проверки используется только вычисленный хэш, который
-              сравнивается с уже зарегистрированными объектами.
+              Файл целиком не отправляется в блокчейн: для сравнения используется только вычисленный хэш.
             </div>
           </form>
         </div>
 
         <div className="card">
-          <div className="label">Как работает верификация</div>
+          <div className="label">Как это работает</div>
           <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-            1. Для загруженного файла вычисляется SHA-256 хэш. <br />
-            2. Хэш сравнивается с записями в базе данных и, при наличии, с объектами в блокчейн-реестре{" "}
-            <code>FileRegistry</code>. <br />
-            3. Система возвращает статус целостности и, при успехе, привязывает документ к блокчейн-транзакции.
+            1. Для файла вычисляется SHA-256. <br />
+            2. Хэш сравнивается с записями в базе и при наличии — с реестром <code>FileRegistry</code>. <br />
+            3. Вы получаете статус и при успехе — ссылку на сертификат и данные on-chain.
           </div>
           <ul className="page-sidebar-list" style={{ marginTop: 10 }}>
             <li>
               <span className="page-sidebar-dot" />
-              On-chain хранятся только хэши, идентификатор объекта и владелец — без медицинского содержимого.
+              В сети хранятся только хэш, идентификатор объекта и кошелёк правообладателя — без содержимого файла.
             </li>
             <li>
               <span className="page-sidebar-dot" />
-              Любое изменение файла меняет его SHA-256 хэш, и верификация покажет несоответствие.
+              Любое изменение файла меняет хэш; проверка покажет несоответствие.
             </li>
             <li>
               <span className="page-sidebar-dot" />
-              Отчёт о проверке можно скопировать или распечатать и приложить к медицинской документации.
+              Результат можно скопировать или распечатать для приложения к делу или отчёту.
             </li>
           </ul>
         </div>
@@ -147,19 +141,18 @@ export const VerifyPage: React.FC = () => {
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
             <div>
-              <div className="label">Результат криптографической проверки</div>
+              <div className="label">Результат проверки</div>
               <div className="muted">
-                {result.is_verified ? "Документ подтверждён системой BlockProof." : "Документ не найден или хэш не соответствует зарегистрированным данным."}
+                {result.is_verified
+                  ? "Документ найден в реестре BlockProof."
+                  : "Документ не найден или хэш не совпадает с реестром."}
               </div>
             </div>
             <div className="row" style={{ gap: 8, alignItems: "center" }}>
               <StatusBadge status={result.is_verified ? "VERIFIED" : "NOT_VERIFIED"} />
               {result.is_verified && result.sha256_hash && (
-                <Link
-                  to={`/verify/hash/${result.sha256_hash}`}
-                  className="btn btn-outline btn-sm"
-                >
-                  Сертификат
+                <Link to={`/verify/hash/${result.sha256_hash}`} className="btn btn-outline btn-sm">
+                  Открыть сертификат
                 </Link>
               )}
             </div>
@@ -167,7 +160,7 @@ export const VerifyPage: React.FC = () => {
 
           <div className="verify-result-grid" style={{ marginTop: 8 }}>
             <div className="card" style={{ padding: 16 }}>
-              <div className="label">Итоговый статус целостности</div>
+              <div className="label">Целостность</div>
               <div style={{ marginTop: 6 }}>
                 <StatusBadge status={result.integrity_status} />
               </div>
@@ -178,24 +171,23 @@ export const VerifyPage: React.FC = () => {
 
             {(result.sha256_hash || result.sha256_stored) && (
               <div className="card" style={{ padding: 16 }}>
-                <div className="label">Сравнение хэшей (Hash Comparison)</div>
+                <div className="label">Сравнение хэшей</div>
                 <div className="verify-hashes" style={{ marginTop: 6 }}>
                   {result.sha256_hash && (
                     <div>
-                      <span className="muted">Вычисленный/переданный хэш:</span>{" "}
+                      <span className="muted">Переданный / вычисленный:</span>{" "}
                       <code>{result.sha256_hash}</code>
                     </div>
                   )}
                   {result.sha256_stored && (
                     <div>
-                      <span className="muted">Хэш в реестре:</span>{" "}
-                      <code>{result.sha256_stored}</code>
+                      <span className="muted">В реестре:</span> <code>{result.sha256_stored}</code>
                     </div>
                   )}
                   {result.sha256_hash && result.sha256_stored && (
                     <div style={{ marginTop: 8 }}>
                       {result.sha256_hash === result.sha256_stored ? (
-                        <span className="ok">Хэши совпадают — целостность подтверждена</span>
+                        <span className="ok">Хэши совпадают</span>
                       ) : (
                         <span className="bad">Хэши не совпадают</span>
                       )}
@@ -206,7 +198,7 @@ export const VerifyPage: React.FC = () => {
             )}
 
             <div className="card" style={{ padding: 16 }}>
-              <div className="label">Основные атрибуты документа</div>
+              <div className="label">Документ</div>
               <div className="verify-hashes" style={{ marginTop: 6 }}>
                 {result.file_name && (
                   <div>
@@ -220,57 +212,49 @@ export const VerifyPage: React.FC = () => {
                 )}
                 {result.digital_object_id && (
                   <div>
-                    <span className="muted">ID объекта в системе:</span>{" "}
-                    <code>{result.digital_object_id}</code>
+                    <span className="muted">ID в системе:</span> <code>{result.digital_object_id}</code>
                   </div>
                 )}
                 {result.owner_id && (
                   <div>
-                    <span className="muted">Владелец (пользователь):</span>{" "}
-                    <code>{result.owner_id}</code>
+                    <span className="muted">Учётная запись владельца:</span> <code>{result.owner_id}</code>
                   </div>
                 )}
                 {result.registered_at && (
                   <div>
-                    <span className="muted">Время регистрации:</span>{" "}
-                    {new Date(result.registered_at).toLocaleString()}
+                    <span className="muted">Дата загрузки:</span> {new Date(result.registered_at).toLocaleString()}
                   </div>
                 )}
               </div>
             </div>
 
             <div className="card" style={{ padding: 16 }}>
-              <div className="label">Blockchain proof (on-chain запись)</div>
+              <div className="label">Блокчейн</div>
               {result.transaction_hash ? (
                 <div className="verify-hashes" style={{ marginTop: 6 }}>
                   <div>
-                    <span className="muted">Tx hash:</span>{" "}
-                    <code>{result.transaction_hash}</code>
+                    <span className="muted">Транзакция:</span> <code>{result.transaction_hash}</code>
                   </div>
                   <div className="row" style={{ marginTop: 6, gap: 8 }}>
                     <button
+                      type="button"
                       className="btn btn-outline btn-sm"
                       onClick={() => navigator.clipboard.writeText(result.transaction_hash || "")}
                     >
-                      Скопировать tx hash
+                      Копировать хэш транзакции
                     </button>
                     <button
+                      type="button"
                       className="btn btn-outline btn-sm"
-                      onClick={() =>
-                        window.open(
-                          `https://example.local/tx/${result.transaction_hash}`,
-                          "_blank"
-                        )
-                      }
+                      onClick={() => window.open(`https://example.local/tx/${result.transaction_hash}`, "_blank")}
                     >
-                      Открыть в блокчейн-обозревателе
+                      Обозреватель блокчейна
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="muted" style={{ marginTop: 6 }}>
-                  Для этого документа пока нет зафиксированной on-chain транзакции. Он может быть зарегистрирован
-                  только в off-chain реестре.
+                  On-chain транзакции пока нет — документ может быть только в off-chain реестре.
                 </div>
               )}
             </div>
@@ -278,6 +262,7 @@ export const VerifyPage: React.FC = () => {
 
           <div className="row no-print" style={{ marginTop: 16, gap: 8 }}>
             <button
+              type="button"
               className="btn btn-outline btn-sm"
               onClick={() => {
                 const text = JSON.stringify(
@@ -288,13 +273,13 @@ export const VerifyPage: React.FC = () => {
                   null,
                   2
                 );
-                navigator.clipboard.writeText(text);
+                void navigator.clipboard.writeText(text);
               }}
             >
-              Скопировать отчёт о проверке
+              Копировать отчёт
             </button>
-            <button className="btn btn-outline btn-sm" onClick={() => window.print()}>
-              Распечатать результат
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => window.print()}>
+              Печать
             </button>
           </div>
         </div>
@@ -302,4 +287,3 @@ export const VerifyPage: React.FC = () => {
     </div>
   );
 };
-

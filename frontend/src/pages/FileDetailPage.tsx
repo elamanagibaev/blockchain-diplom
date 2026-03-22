@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
-import { ActionHistoryTimeline, ActionItem } from "../components/ActionHistoryTimeline";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { Spinner } from "../components/Spinner";
@@ -25,14 +24,12 @@ type Data = {
   owner_email?: string | null;
   storage_key?: string;
   document_type?: string | null;
-  actions: ActionItem[];
 };
 
 export const FileDetailPage: React.FC = () => {
   const { id } = useParams();
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chainActions, setChainActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [transferring, setTransferring] = useState(false);
@@ -81,24 +78,8 @@ export const FileDetailPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<Data>(`/files/${id}/history`);
-      const dto = res.data as any;
-      setData(dto);
-      if (dto.blockchain_object_id) {
-        try {
-          const hres = await api.get<any[]>(`/blockchain/object/${dto.blockchain_object_id}/history`);
-          const mapped: ActionItem[] = (hres.data || []).map((a: any) => ({
-            action_type: a.action_type,
-            performed_at: a.timestamp,
-            details: a.details,
-          }));
-          setChainActions(mapped);
-        } catch {
-          setChainActions([]);
-        }
-      } else {
-        setChainActions([]);
-      }
+      const res = await api.get<Data>(`/files/${id}`);
+      setData(res.data);
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Ошибка загрузки");
     } finally {
@@ -171,7 +152,7 @@ export const FileDetailPage: React.FC = () => {
   return (
     <div className="page">
       <PageHeader
-        title="Медицинский документ"
+        title="Патентный документ"
         subtitle={data.title || data.file_name}
         backTo={{ to: "/files", label: "Мои патенты" }}
         actions={
@@ -188,7 +169,7 @@ export const FileDetailPage: React.FC = () => {
               <span className="muted" style={{ fontSize: 14 }}>Ожидает одобрения администратора</span>
             ) : null}
             <Link to={`/certificate/${data.id}`} className="btn btn-outline btn-sm">
-              Сертификат
+              Открыть сертификат
             </Link>
           </div>
         }
@@ -196,7 +177,7 @@ export const FileDetailPage: React.FC = () => {
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
         <div className="card">
-          <div className="label">Метаданные документа</div>
+          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.1rem" }}>Метаданные</h2>
           <div className="grid" style={{ marginTop: 8, gap: 8 }}>
             <div>
               <span className="muted">ID объекта:</span> <code>{data.id}</code>
@@ -259,7 +240,7 @@ export const FileDetailPage: React.FC = () => {
         </div>
 
         <div className="card">
-          <div className="label">Ownership — владение документом</div>
+          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.1rem" }}>Правообладатель</h2>
           <div style={{ marginTop: 8 }}>
             <div><span className="muted">Владелец:</span> {data.owner_email || data.owner_id}</div>
             {data.owner_wallet_address && (
@@ -269,13 +250,13 @@ export const FileDetailPage: React.FC = () => {
               </div>
             )}
             <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-              При регистрации в блокчейне документ привязывается к wallet-адресу владельца.
+              При регистрации в блокчейне запись привязывается к кошельку правообладателя.
             </div>
           </div>
         </div>
 
         <div className="card">
-          <div className="label">Integrity — целостность</div>
+          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.1rem" }}>Целостность</h2>
           <div style={{ marginTop: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
               <span className="muted">SHA-256 хэш:</span> <code style={{ wordBreak: "break-all" }}>{data.sha256_hash}</code>
@@ -287,13 +268,13 @@ export const FileDetailPage: React.FC = () => {
               </button>
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Любое изменение файла приведёт к смене хэша и нарушению соответствия с on-chain записью.
+              Любое изменение файла меняет хэш и перестаёт совпадать с записью в блокчейне.
             </div>
           </div>
         </div>
 
         <div className="card">
-          <div className="label">Blockchain proof</div>
+          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.1rem" }}>Блокчейн</h2>
           <div style={{ marginTop: 8 }}>
             <BlockchainInfoCard
               txHash={data.blockchain_tx_hash}
@@ -303,17 +284,17 @@ export const FileDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {isOwner && (
+      {isOwner && data.blockchain_tx_hash && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Передать документ</h3>
+          <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Передача прав</h2>
           <div className="muted" style={{ fontSize: 12 }}>
-            Введите wallet address получателя. Пользователь с таким wallet должен быть зарегистрирован.
+            Укажите адрес кошелька нового правообладателя. Аккаунт с этим адресом должен быть зарегистрирован в системе.
           </div>
           <div className="row" style={{ marginTop: 12, gap: 8, alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: 200 }}>
               <input
                 className="input"
-                placeholder="0x..."
+                placeholder="0x… (адрес кошелька получателя)"
                 value={transferWallet}
                 onChange={(e) => setTransferWallet(e.target.value)}
               />
@@ -323,34 +304,11 @@ export const FileDetailPage: React.FC = () => {
               onClick={() => void transferDocument()}
               disabled={transferring || !transferWallet.trim()}
             >
-              {transferring ? "Передача…" : "Передать"}
+              {transferring ? "Передача…" : "Передать права"}
             </button>
           </div>
         </div>
       )}
-
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>История документов (Timeline)</h3>
-        <div className="muted" style={{ fontSize: 12 }}>
-          Хронология событий: загрузка, подача на регистрацию, одобрение/отклонение, регистрация в блокчейне,
-          передача владения. События из БД и контракта <code>FileRegistry</code> объединены.
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <ActionHistoryTimeline
-            items={[
-              ...(data.actions || []).map((a) => ({
-                ...a,
-                performed_at: typeof a.performed_at === "string" ? a.performed_at : (a as any).performed_at,
-              })),
-              ...chainActions,
-            ].sort(
-              (a, b) =>
-                new Date((a.performed_at as string) || 0).getTime() -
-                new Date((b.performed_at as string) || 0).getTime()
-            )}
-          />
-        </div>
-      </div>
     </div>
   );
 };

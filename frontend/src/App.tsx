@@ -11,9 +11,8 @@ import { FileDetailPage } from "./pages/FileDetailPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { WalletProfileViewPage } from "./pages/WalletProfileViewPage";
 import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
-import { AuditLogsPage } from "./pages/AuditLogsPage";
-import { BlockchainJournalPage } from "./pages/BlockchainJournalPage";
 import { CertificatePage } from "./pages/CertificatePage";
 
 const NotFoundPage: React.FC = () => (
@@ -41,10 +40,8 @@ export const App: React.FC = () => {
         { path: "verify", element: <VerifyPage /> },
         { path: "certificate/:id", element: <CertificatePage /> },
         { path: "global", element: <GlobalRegistryPage /> },
+        { path: "profile/user", element: <WalletProfileViewPage /> },
         { path: "profile", element: <ProfilePage /> },
-        { path: "audit", element: <AuditLogsPage /> },
-        { path: "blockchain-journal", element: <BlockchainJournalPage /> },
-        { path: "explorer", element: <BlockchainJournalPage /> },
         { path: "admin", element: <AdminPage /> }
       ]
     },

@@ -11,7 +11,7 @@ export const BlockchainInfoCard: React.FC<BlockchainInfoCardProps> = ({ txHash, 
       <div className="blockchain-empty">
         <span className="muted">Документ ещё не зарегистрирован в блокчейне.</span>
         <span className="muted" style={{ fontSize: 11, marginTop: 4, display: "block" }}>
-          Нажмите «Зарегистрировать в блокчейне» выше, чтобы зафиксировать хэш в контракте FileRegistry.
+          Подайте заявку на регистрацию выше, чтобы закрепить запись в смарт-контракте.
         </span>
       </div>
     );

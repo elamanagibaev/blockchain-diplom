@@ -1,6 +1,6 @@
 """
 Скрипт для создания демо-данных к защите диплома.
-Создаёт пользователей и медицинские документы для демонстрации платформы.
+Создаёт пользователей и патентные документы для демонстрации платформы.
 """
 import hashlib
 import os
@@ -14,7 +14,6 @@ from io import BytesIO
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.models.digital_object import DigitalObject
-from app.models.action_history import ActionHistory
 from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.storage.base import StorageBackend
@@ -25,19 +24,19 @@ settings = get_settings()
 
 
 DEMO_FILES = [
-    ("Результаты_анализа_крови.pdf", "application/pdf"),
-    ("Медицинское_заключение.pdf", "application/pdf"),
-    ("Выписка_из_стационара.pdf", "application/pdf"),
-    ("Направление_на_МРТ.pdf", "application/pdf"),
-    ("Диагностический_отчёт.pdf", "application/pdf"),
+    ("Заявка_на_изобретение.pdf", "application/pdf"),
+    ("Описание_изобретения.pdf", "application/pdf"),
+    ("Формула_изобретения.pdf", "application/pdf"),
+    ("Реферат.pdf", "application/pdf"),
+    ("Диаграммные_материалы.pdf", "application/pdf"),
 ]
 
 
 def create_users(db):
     users_data = [
         ("admin@example.com", "admin", "admin"),
-        ("doctor@clinic.ru", "doctor123", "user"),
-        ("patient@example.com", "patient123", "user"),
+        ("patentee@ip.ru", "patentee123", "user"),
+        ("inventor@example.com", "inventor123", "user"),
     ]
     created = []
     for email, password, role in users_data:
@@ -60,9 +59,9 @@ def create_users(db):
 
 
 def create_demo_documents(db, storage: StorageBackend):
-    doctor = db.query(User).filter(User.email == "doctor@clinic.ru").first()
-    if not doctor:
-        print("  Пропуск документов: пользователь doctor@clinic.ru не найден")
+    patentee = db.query(User).filter(User.email == "patentee@ip.ru").first()
+    if not patentee:
+        print("  Пропуск документов: пользователь patentee@ip.ru не найден")
         return 0
 
     count = 0
@@ -73,7 +72,7 @@ def create_demo_documents(db, storage: StorageBackend):
         sha = hashlib.sha256(content).hexdigest()
 
         existing = db.query(DigitalObject).filter(
-            DigitalObject.owner_id == doctor.id,
+            DigitalObject.owner_id == patentee.id,
             DigitalObject.file_name == filename,
         ).first()
         if existing:
@@ -81,29 +80,20 @@ def create_demo_documents(db, storage: StorageBackend):
 
         storage_key = storage.save(BytesIO(content), filename)
         obj = DigitalObject(
-            owner_id=doctor.id,
+            owner_id=patentee.id,
             file_name=filename,
             title=filename,
             mime_type=mime,
             size_bytes=len(content),
             storage_key=storage_key,
             sha256_hash=sha,
-            description=f"Демо-документ: {filename}",
+            description=f"Демо: {filename}",
             document_type="document",
             visibility="public",
-            owner_wallet_address=doctor.wallet_address,
+            owner_wallet_address=patentee.wallet_address,
             status="REGISTERED",
         )
         db.add(obj)
-        db.flush()
-        db.add(
-            ActionHistory(
-                digital_object_id=obj.id,
-                action_type="REGISTER",
-                performed_by_id=doctor.id,
-                details="Создан демо-скриптом seed_demo.py",
-            )
-        )
         count += 1
         print(f"  Создан документ: {filename}")
 
@@ -126,8 +116,8 @@ def run():
 
         print("\nДемо-доступ:")
         print("  admin@example.com / admin")
-        print("  doctor@clinic.ru / doctor123")
-        print("  patient@example.com / patient123")
+        print("  patentee@ip.ru / patentee123")
+        print("  inventor@example.com / inventor123")
     except Exception as e:
         db.rollback()
         raise

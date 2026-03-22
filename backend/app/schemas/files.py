@@ -25,22 +25,9 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     document_type: str | None = None
     storage_key: str
     blockchain_registered_at: datetime | None = None
-
-
-class ActionHistoryItem(BaseModel):
-    id: UUID
-    action_type: str
-    performed_at: datetime
-    performed_by_id: UUID | None = None
-    details: str | None = None
-    blockchain_tx_hash: str | None = None
-
-    class Config:
-        from_attributes = True
-
-
-class DigitalObjectWithHistory(DigitalObjectRead):
-    actions: list[ActionHistoryItem]
+    # Заполняется только для GET /files/global — последняя передача в блокчейне
+    last_transfer_from_wallet: str | None = None
+    last_transfer_to_wallet: str | None = None
 
 
 class Metrics(BaseModel):
@@ -48,17 +35,3 @@ class Metrics(BaseModel):
     on_chain: int
     verified: int
     invalid: int
-
-
-class RecentActivityItem(BaseModel):
-    id: UUID
-    action_type: str
-    performed_at: datetime
-    file_name: str
-    object_id: UUID
-    details: str | None = None
-
-
-class RecentActivityResponse(BaseModel):
-    actions: list[RecentActivityItem]
-

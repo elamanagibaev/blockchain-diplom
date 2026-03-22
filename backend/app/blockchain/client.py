@@ -51,12 +51,17 @@ class BlockchainClient:
             self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
         abi: list[dict[str, Any]] = []
-        # Prefer shared ABI file from dockerized deploy
+        abi_path = Path(__file__).parent / "abi" / "FileRegistry.json"
+        # Prefer shared ABI from dockerized deploy; fall back to bundled ABI if file is empty or missing
         shared_abi_path = Path(settings.CONTRACT_ABI_FILE)
         if shared_abi_path.exists():
-            abi = json.loads(shared_abi_path.read_text(encoding="utf-8"))
-        else:
-            abi_path = Path(__file__).parent / "abi" / "FileRegistry.json"
+            try:
+                shared_abi = json.loads(shared_abi_path.read_text(encoding="utf-8"))
+                if isinstance(shared_abi, list) and len(shared_abi) > 0:
+                    abi = shared_abi
+            except Exception:
+                pass
+        if not abi:
             with abi_path.open("r", encoding="utf-8") as f:
                 abi = json.load(f)
         if not abi:
@@ -74,12 +79,19 @@ class BlockchainClient:
         try:
             from_addr = Web3.to_checksum_address(settings.CONTRACT_OWNER_ADDRESS)
             nonce = self.w3.eth.get_transaction_count(from_addr)
+            try:
+                gas_est = fn.estimate_gas({"from": from_addr})
+                gas_limit = min(int(gas_est * 1.25) + 50_000, 3_000_000)
+            except Exception as gas_err:
+                logger.warning("Gas estimation failed, using default cap: %s", gas_err)
+                gas_limit = 500_000
             tx = fn.build_transaction(
                 {
                     "from": from_addr,
                     "nonce": nonce,
                     "chainId": settings.CHAIN_ID,
                     "gasPrice": self.w3.eth.gas_price,
+                    "gas": gas_limit,
                 }
             )
             signed = self.w3.eth.account.sign_transaction(tx, private_key=settings.CONTRACT_OWNER_PRIVATE_KEY)
@@ -96,7 +108,7 @@ class BlockchainClient:
             logger.info(f"Transaction confirmed: {receipt.transactionHash.hex()}")
             return receipt.transactionHash.hex()
         except Exception as e:
-            logger.error(f"Transaction error: {str(e)}")
+            logger.exception("Blockchain transaction failed: %s", e)
             raise
 
     def register_object(self, object_id: str, file_hash: str, owner: str, metadata_uri: str, status: str) -> str:

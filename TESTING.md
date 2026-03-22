@@ -122,11 +122,11 @@ curl -X GET "http://localhost:8000/api/files?q=test" \
 
 # Expected: 200 OK with filtered list
 
-# 4. Get file history
-curl -X GET "http://localhost:8000/api/files/$FILE_ID/history" \
+# 4. Get file by ID
+curl -X GET "http://localhost:8000/api/files/$FILE_ID" \
   -H "Authorization: Bearer $TOKEN"
 
-# Expected: 200 OK with action history
+# Expected: 200 OK with file metadata
 ```
 
 ### Scenario 3: File Verification

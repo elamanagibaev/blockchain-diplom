@@ -23,7 +23,7 @@ class DigitalObject(Base):
     storage_backend = Column(String(20), nullable=False, default="local")  # "local" | "minio"
     sha256_hash = Column(String(64), nullable=False, index=True)
     description = Column(String(1000), nullable=True)
-    document_type = Column(String(50), nullable=True)  # patent, medical, etc.
+    document_type = Column(String(50), nullable=True)  # patent, image, etc.
     visibility = Column(String(20), nullable=False, default="public")
 
     owner_wallet_address = Column(String(100), nullable=True)  # denormalized for global view
@@ -36,5 +36,4 @@ class DigitalObject(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     owner = relationship("User", backref="digital_objects")
-    actions = relationship("ActionHistory", back_populates="digital_object", cascade="all, delete-orphan")
 

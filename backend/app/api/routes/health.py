@@ -12,7 +12,7 @@ def health():
         "status": "ok",
         "project": "BlockProof",
         "version": "1.0.0",
-        "description": "Защищённая платформа для хранения и верификации медицинских документов",
+        "description": "Защищённая платформа для хранения и верификации патентных документов",
         "storage_backend": settings.FILE_STORAGE_BACKEND,
     }
 

@@ -41,7 +41,7 @@ export const UploadPage: React.FC = () => {
       if (description) form.append("description", description);
       const res = await api.post<UploadResult>("/files/upload", form);
       setResult(res.data);
-      notify("success", "Документ успешно загружен и зарегистрирован off-chain.");
+      notify("success", "Документ загружен, хэш зафиксирован во внутреннем реестре.");
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Ошибка загрузки";
       setError(msg);
@@ -61,14 +61,14 @@ export const UploadPage: React.FC = () => {
   return (
     <div className="page">
       <PageHeader
-        title="Загрузка медицинского документа"
-        subtitle="Загрузите PDF, изображение или другой медицинский файл. Платформа вычислит SHA-256 хэш и сохранит контрольную запись."
+        title="Загрузка патентного документа"
+        subtitle="PDF, изображение или текстовый файл. Платформа вычислит контрольную сумму и сохранит запись в реестре."
       />
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2.2fr)" }}>
         <div className="card">
           <div className="badge badge-soft-blue badge-pill" style={{ marginBottom: 10 }}>
-            Step 1 · Upload off-chain
+            Шаг 1 · Загрузка файла
           </div>
           <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
             <div>
@@ -81,44 +81,52 @@ export const UploadPage: React.FC = () => {
               />
             </div>
             <div>
-              <div className="label">Описание (тип документа, пациент, контекст)</div>
+              <div className="label">Описание (номер заявки, вид объекта ИС, контекст)</div>
               <textarea
                 className="input"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Например: Выписка из стационара, Петров И.И., дата госпитализации..."
+                placeholder="Например: заявка на изобретение №…, «Способ…», дата подачи…"
               />
             </div>
             {error && <div className="bad">{error}</div>}
             <button className="btn btn-primary" type="submit" disabled={loading}>
-              {loading ? "Загрузка..." : "Загрузить и зафиксировать хэш"}
+              {loading ? "Загрузка…" : "Загрузить и зафиксировать хэш"}
             </button>
             <div className="muted" style={{ fontSize: 12 }}>
-              Файл сохраняется в защищённом off-chain хранилище, а его SHA-256 хэш и метаданные — в базе
-              данных. На этом шаге запись в блокчейн ещё не создаётся.
+              Файл сохраняется в защищённом хранилище, хэш и метаданные — в базе. Запись в блокчейне создаётся после
+              одобрения администратором.
             </div>
           </form>
         </div>
 
         <div className="card">
-          <div className="label">Модель потока документа</div>
-          <ul className="page-sidebar-list" style={{ marginTop: 6 }}>
-            <li>
-              <span className="page-sidebar-dot" />
-              <strong>Upload</strong> — файл попадает в off-chain хранилище, создаётся запись в
-              <code>digital_objects</code>.
+          <h2 className="section-title" style={{ marginTop: 0, fontSize: "1.05rem" }}>
+            Как устроен процесс
+          </h2>
+          <ol
+            style={{
+              margin: "12px 0 0",
+              paddingLeft: 22,
+              lineHeight: 1.55,
+              fontSize: 14,
+              color: "var(--color-text)",
+            }}
+          >
+            <li style={{ marginBottom: 12 }}>
+              Вы выбираете файл на устройстве: он сохраняется в защищённом хранилище платформы, в базе создаётся запись с
+              именем, типом и вычисленным хэшем. На этом шаге блокчейн ещё не используется.
+            </li>
+            <li style={{ marginBottom: 12 }}>
+              Чтобы закрепить хэш в распределённом реестре, вы подаёте заявку из карточки документа. Администратор
+              проверяет её и при одобрении отправляет транзакцию в смарт-контракт: в сеть попадают только хэш, идентификатор
+              объекта и адрес кошелька правообладателя.
             </li>
             <li>
-              <span className="page-sidebar-dot" />
-              <strong>Register on-chain</strong> — администратор регистрирует объект в контракте{" "}
-              <code>FileRegistry</code>, фиксируя хэш и владельца.
+              Любой участник может позже загрузить тот же файл или указать его хэш на странице верификации: система
+              сравнит данные с реестром и покажет, совпадает ли документ с записью.
             </li>
-            <li>
-              <span className="page-sidebar-dot" />
-              <strong>Verify</strong> — пациент, врач или аудитор загружает файл или хэш и получает proof of
-              authenticity.
-            </li>
-          </ul>
+          </ol>
         </div>
       </div>
 
@@ -126,11 +134,11 @@ export const UploadPage: React.FC = () => {
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
             <div>
-              <div className="label">Документ успешно зарегистрирован off-chain</div>
+              <div className="label">Документ сохранён во внутреннем реестре</div>
               <div className="muted">
-                На следующем шаге зарегистрируйте документ в блокчейне.{" "}
+                Для фиксации в блокчейне подайте заявку из карточки документа.{" "}
                 <Link to={`/files/${result.id}`} style={{ color: "var(--color-primary)" }}>
-                  Открыть детали →
+                  Открыть карточку →
                 </Link>
               </div>
             </div>
@@ -139,7 +147,7 @@ export const UploadPage: React.FC = () => {
           <div className="grid" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr)" }}>
             <div>
               <div>
-                <span className="muted">Object ID:</span> <code>{result.id}</code>
+                <span className="muted">ID объекта:</span> <code>{result.id}</code>
               </div>
               <div>
                 <span className="muted">Имя файла:</span> {result.file_name}
@@ -156,15 +164,14 @@ export const UploadPage: React.FC = () => {
                 <span className="muted">SHA-256:</span> <code>{result.sha256_hash}</code>
               </div>
               <div>
-                <span className="muted">Создан:</span>{" "}
-                {new Date(result.created_at).toLocaleString()}
+                <span className="muted">Создан:</span> {new Date(result.created_at).toLocaleString()}
               </div>
               <div>
-                <span className="muted">On-chain:</span>{" "}
+                <span className="muted">В блокчейне:</span>{" "}
                 {result.blockchain_tx_hash ? (
                   <code>{result.blockchain_tx_hash}</code>
                 ) : (
-                  <span className="muted">ещё не зарегистрирован</span>
+                  <span className="muted">пока нет</span>
                 )}
               </div>
             </div>
@@ -174,4 +181,3 @@ export const UploadPage: React.FC = () => {
     </div>
   );
 };
-

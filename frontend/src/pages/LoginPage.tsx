@@ -133,7 +133,7 @@ export const LoginPage: React.FC = () => {
               className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="doctor@example.com"
+              placeholder="patentee@example.com"
             />
           </div>
           <div>

@@ -60,10 +60,9 @@ export const MyFilesPage: React.FC = () => {
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 22 }}>Мои патенты и документы</h2>
+            <h1 style={{ margin: 0, fontSize: 22 }}>Мои патенты</h1>
             <div className="muted">
-              Все файлы, которые вы загрузили в систему. Используйте фильтры, чтобы анализировать статус
-              регистрации и целостности.
+              Загруженные патентные документы. Фильтруйте по статусу и ищите по имени файла или хэшу.
             </div>
           </div>
           <button className="btn btn-muted" onClick={() => void load(search, statusFilter)}>
@@ -101,8 +100,8 @@ export const MyFilesPage: React.FC = () => {
           </div>
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          После загрузки нажмите «Подать на регистрацию» для отправки заявки администратору. После одобрения
-          документ будет зарегистрирован в блокчейн-контракте.
+          После загрузки нажмите «Подать на регистрацию» — заявка уйдёт администратору. После одобрения запись
+          появится в смарт-контракте.
         </div>
       </div>
 
@@ -116,10 +115,10 @@ export const MyFilesPage: React.FC = () => {
             <div className="empty-state-icon">📁</div>
             <div className="empty-state-title">Нет документов</div>
             <div className="muted" style={{ marginTop: 4 }}>
-              Загрузите медицинский документ, чтобы начать работу с платформой.
+              Загрузите патентный документ, чтобы зафиксировать хэш и подать заявку на регистрацию в сети.
             </div>
             <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
-              Загрузить документ
+              Загрузить патентный документ
             </Link>
           </div>
         ) : (

@@ -9,8 +9,6 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.utils.wallet import generate_evm_wallet, encrypt_private_key
-from app.services.audit_service import AuditService
-
 settings = get_settings()
 
 
@@ -54,8 +52,6 @@ class AuthService:
             is_active=True,
         )
         self.db.add(user)
-        self.db.flush()
-        AuditService(self.db).log_user_created(user)
         self.db.commit()
         self.db.refresh(user)
         return user

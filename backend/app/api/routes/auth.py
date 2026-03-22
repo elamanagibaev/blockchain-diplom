@@ -11,11 +11,11 @@ from app.schemas.auth import (
     Token,
     WalletChallengeRequest,
     WalletChallengeResponse,
+    WalletProfileLookup,
     WalletVerifyRequest,
 )
 from app.schemas.user import UserCreate, UserRead
 from app.services.auth_service import AuthService
-from app.services.audit_service import AuditService
 from app.services.wallet_auth import create_challenge, verify_signature_and_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -30,13 +30,29 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
     user = AuthService(db).authenticate(form_data.username, form_data.password)
     if not user:
-        AuditService(db).log_login_failed(form_data.username)
-        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    AuditService(db).log_login(user)
-    db.commit()
     token, expires_in = AuthService(db).create_login_token(user)
     return Token(access_token=token, expires_in=expires_in)
+
+
+@router.get("/wallet/{address}/lookup", response_model=WalletProfileLookup)
+def lookup_user_by_wallet(
+    address: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WalletProfileLookup:
+    """Найти пользователя по адресу кошелька (для перехода из общего реестра)."""
+    addr = (address or "").strip()
+    if not addr:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Адрес не указан")
+    user = db.query(User).filter(User.wallet_address.ilike(addr)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    return WalletProfileLookup(
+        id=str(user.id),
+        email=user.email,
+        wallet_address=user.wallet_address,
+    )
 
 
 @router.get("/me", response_model=MeResponse)

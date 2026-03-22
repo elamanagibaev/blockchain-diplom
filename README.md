@@ -10,7 +10,6 @@
   - timestamp регистрации
   - owner (wallet address)
   - metadataURI (ссылка на off-chain метаданные)
-  - история действий
 
 ### Стек
 
@@ -100,10 +99,8 @@ npm run dev
 - **Files**
   - `POST /api/files/upload`
   - `GET /api/files`
-  - `GET /api/files/activity/recent`
   - `GET /api/files/metrics`
   - `GET /api/files/{id}`
-  - `GET /api/files/{id}/history`
 - **Verification**
   - `POST /api/verify/file`
   - `GET /api/verify/hash/{hash}`
@@ -175,15 +172,15 @@ cd backend
 python -m app.scripts.seed_demo
 ```
 
-Создаются пользователи и демо-документы (анализы, выписки, направления):
+Создаются пользователи и демо-патентные документы:
 - `admin@example.com` / `admin`
-- `doctor@clinic.ru` / `doctor123`
-- `patient@example.com` / `patient123`
+- `patentee@ip.ru` / `patentee123`
+- `inventor@example.com` / `inventor123`
 
 Вы также можете регистрировать пользователей через веб-интерфейс или `POST /api/auth/register`.
 
-Для демонстрации загрузите несколько файлов через фронтэнд — они появятся на странице "My documents";
-используйте кнопку "Register on-chain" чтобы реализовать полную цепочку.
+Для демонстрации загрузите файлы через интерфейс — они появятся в разделе «Мои патенты»; подайте заявку на
+регистрацию в блокчейне и одобрите её в панели администратора.
 
 ## Security & Production
 

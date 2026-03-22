@@ -165,42 +165,6 @@ Requires: `Authorization: Bearer <token>`
 
 ---
 
-### Get File History
-
-**GET** `/files/{id}/history`
-
-Requires: `Authorization: Bearer <token>`
-
-Returns file details with action history.
-
-**Response (200 OK):**
-```json
-{
-  "id": "uuid",
-  "file_name": "document.pdf",
-  ...
-  "actions": [
-    {
-      "id": "uuid",
-      "action_type": "REGISTER",
-      "performed_at": "2024-01-15T10:30:00Z",
-      "performed_by_id": "uuid",
-      "details": "Initial registration (off-chain)",
-      "blockchain_tx_hash": null
-    },
-    {
-      "id": "uuid",
-      "action_type": "VERIFY",
-      "performed_at": "2024-01-15T10:35:00Z",
-      "details": "Verification request",
-      ...
-    }
-  ]
-}
-```
-
----
-
 ### Download File
 
 **GET** `/files/{id}/download`

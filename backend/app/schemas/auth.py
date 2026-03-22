@@ -35,3 +35,11 @@ class MeResponse(BaseModel):
     on_chain_count: int = 0
     created_at: datetime
 
+
+class WalletProfileLookup(BaseModel):
+    """Публичные данные пользователя по адресу кошелька (для ссылок из реестра)."""
+
+    id: str
+    email: str
+    wallet_address: str | None
+

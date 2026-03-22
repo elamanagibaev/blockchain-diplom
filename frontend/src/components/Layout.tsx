@@ -24,7 +24,7 @@ export const Layout: React.FC = () => {
             <div className="app-brand-mark">BP</div>
             <div className="app-brand-text">
               <div className="app-brand-title">BlockProof</div>
-              <div className="app-brand-subtitle">Blockchain platform for data verification</div>
+              <div className="app-brand-subtitle">Верификация патентных документов в блокчейне</div>
             </div>
           </Link>
 
@@ -65,18 +65,6 @@ export const Layout: React.FC = () => {
             >
               Профиль
             </Link>
-            <Link
-              to="/audit"
-              className={`app-nav-link ${isActive("/audit") ? "app-nav-link--active" : ""}`}
-            >
-              Журнал
-            </Link>
-            <Link
-              to="/explorer"
-              className={`app-nav-link ${isActive("/explorer") || isActive("/blockchain-journal") ? "app-nav-link--active" : ""}`}
-            >
-              Explorer
-            </Link>
             {user?.role === "admin" && (
               <Link
                 to="/admin"
@@ -113,23 +101,23 @@ export const Layout: React.FC = () => {
           </section>
           <aside className="page-sidebar">
             <div className="page-sidebar-card">
-              <h3>Платформа верификации данных</h3>
+              <h3>О платформе</h3>
               <p>
-                Хранение файлов в защищённом хранилище и контрольные записи в блокчейне для проверки
-                подлинности и целостности.
+                Защищённое хранение файлов и фиксация хэшей в блокчейне для проверки подлинности патентных
+                документов.
               </p>
               <ul className="page-sidebar-list">
                 <li>
                   <span className="page-sidebar-dot" />
-                  Хэш документа хранится on-chain
+                  Хэш фиксируется on-chain
                 </li>
                 <li>
                   <span className="page-sidebar-dot" />
-                  Файл остаётся в off-chain хранилище
+                  Содержимое остаётся в off-chain хранилище
                 </li>
                 <li>
                   <span className="page-sidebar-dot" />
-                  Невозможность незаметно изменить историю записей
+                  Запись в реестре устойчива к скрытым правкам
                 </li>
               </ul>
             </div>

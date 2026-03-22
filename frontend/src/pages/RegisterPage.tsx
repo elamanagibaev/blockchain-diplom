@@ -61,8 +61,8 @@ export const RegisterPage: React.FC = () => {
 
   return (
     <AuthLayout
-      title="Создание медицинского аккаунта"
-      subtitle="При регистрации автоматически создаётся blockchain wallet для привязки документов"
+      title="Регистрация патентообладателя"
+      subtitle="При создании аккаунта генерируется кошелёк для привязки патентных документов в блокчейне"
     >
       <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
         <div>
@@ -71,7 +71,7 @@ export const RegisterPage: React.FC = () => {
             className="input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="clinic.admin@example.com"
+            placeholder="ip@company.ru"
           />
         </div>
         <div>

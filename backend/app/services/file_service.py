@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 import re
@@ -5,11 +6,11 @@ from io import BytesIO
 
 from fastapi import HTTPException, UploadFile, status
 from uuid import UUID
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
+from web3 import Web3
 
 from app.core.config import get_settings
-from app.models.action_history import ActionHistory
 from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.storage.base import StorageBackend
@@ -18,9 +19,9 @@ from app.storage.minio_storage import MinioStorageBackend
 from app.utils.hashing import sha256_file
 from app.models.verification_log import VerificationLog
 from app.models.blockchain_event import BlockchainEvent
-from app.services.audit_service import AuditService
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB (demo safety)
 ALLOWED_MIME_PREFIXES = ("application/pdf", "image/", "text/")
@@ -113,17 +114,6 @@ class FileService:
             status="UPLOADED",
         )
         self.db.add(obj)
-        self.db.flush()
-
-        self.db.add(
-            ActionHistory(
-                digital_object_id=obj.id,
-                action_type="REGISTER",
-                performed_by_id=user.id,
-                details="Initial registration (off-chain)",
-            )
-        )
-        AuditService(self.db).log_document_upload(user, obj.id, sha)
         self.db.commit()
         self.db.refresh(obj)
         return obj
@@ -191,14 +181,6 @@ class FileService:
                 detail="Можно подать заявку только для загруженных или отклонённых документов",
             )
         obj.status = "PENDING_APPROVAL"
-        self.db.add(
-            ActionHistory(
-                digital_object_id=obj.id,
-                action_type="SUBMIT_FOR_REGISTRATION",
-                performed_by_id=user.id,
-                details="Заявка на регистрацию в блокчейне",
-            )
-        )
         self.db.commit()
         self.db.refresh(obj)
         return obj
@@ -223,15 +205,6 @@ class FileService:
         if user.role != "admin" and obj.owner_id != user.id and obj.visibility != "public":
             raise HTTPException(status_code=403, detail="Not enough permissions")
         return obj
-
-    def get_history(self, user: User, obj_id) -> list[ActionHistory]:
-        obj = self.get_object(user, obj_id, require_owner=False)
-        return (
-            self.db.query(ActionHistory)
-            .filter(ActionHistory.digital_object_id == obj.id)
-            .order_by(ActionHistory.performed_at.asc())
-            .all()
-        )
 
     def metrics(self, user: User) -> dict[str, int]:
         # aggregated counts for dashboard
@@ -288,85 +261,75 @@ class FileService:
     def transfer_document(
         self, user: User, obj_id: UUID, to_wallet_address: str
     ) -> DigitalObject:
-        """Передать документ другому пользователю по wallet address."""
+        """Передать документ другому пользователю по адресу кошелька (сначала транзакция в блокчейне)."""
         obj = self.get_object(user, obj_id, require_owner=True)
-        if not obj:
-            raise HTTPException(status_code=404, detail="Object not found")
 
-        to_wallet = to_wallet_address.strip()
-        if not to_wallet.startswith("0x") or len(to_wallet) != 42:
-            raise HTTPException(status_code=400, detail="Некорректный wallet address")
+        if not obj.blockchain_tx_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="Передача возможна только после регистрации документа в блокчейне",
+            )
 
-        new_owner = self.db.query(User).filter(User.wallet_address == to_wallet).first()
+        raw = (to_wallet_address or "").strip()
+        if len(raw) != 42 or not raw.startswith("0x"):
+            raise HTTPException(
+                status_code=400,
+                detail="Некорректный адрес кошелька (ожидается 0x и 40 шестнадцатеричных символов)",
+            )
+        try:
+            to_wallet = Web3.to_checksum_address(raw)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Некорректный формат адреса кошелька")
+
+        new_owner = (
+            self.db.query(User)
+            .filter(func.lower(User.wallet_address) == func.lower(to_wallet))
+            .first()
+        )
         if not new_owner:
             raise HTTPException(
                 status_code=404,
-                detail="Пользователь с таким wallet address не найден в системе",
+                detail="Пользователь с таким адресом кошелька не найден в системе",
             )
         if new_owner.id == user.id:
             raise HTTPException(status_code=400, detail="Нельзя передать документ самому себе")
 
         from_wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
+        chain_object_id = str(obj.blockchain_object_id or obj.id)
+
+        from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
+
+        try:
+            client = BlockchainClient()
+            tx_hash = client.transfer_ownership(chain_object_id, to_wallet)
+        except BlockchainNotConfiguredError as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Блокчейн не настроен, передача невозможна: {e}",
+            )
+        except Exception as e:
+            logger.exception("Blockchain transfer_ownership failed for object %s", obj_id)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Ошибка передачи в блокчейне: {type(e).__name__}: {str(e)}",
+            )
+
         obj.owner_id = new_owner.id
         obj.owner_wallet_address = to_wallet
         obj.status = "TRANSFERRED"
 
-        tx_hash: str | None = None
-        if obj.blockchain_object_id:
-            try:
-                from app.blockchain.client import BlockchainClient, BlockchainNotConfiguredError
-                client = BlockchainClient()
-                tx_hash = client.transfer_ownership(str(obj.id), to_wallet)
-            except BlockchainNotConfiguredError:
-                pass
-            except Exception:
-                self.db.rollback()
-                raise HTTPException(status_code=500, detail="Ошибка обновления ownership в блокчейне")
-
-        if tx_hash:
-            self.db.add(
-                BlockchainEvent(
-                    action_type="TRANSFER",
-                    document_id=obj.id,
-                    tx_hash=tx_hash,
-                    from_wallet=from_wallet,
-                    to_wallet=to_wallet,
-                    initiator_user_id=user.id,
-                )
-            )
-
         self.db.add(
-            ActionHistory(
-                digital_object_id=obj.id,
+            BlockchainEvent(
                 action_type="TRANSFER",
-                performed_by_id=user.id,
-                details=f"Transferred from {from_wallet} to {to_wallet}",
+                document_id=obj.id,
+                tx_hash=tx_hash,
+                from_wallet=from_wallet,
+                to_wallet=to_wallet,
+                initiator_user_id=user.id,
             )
         )
-        AuditService(self.db).log_transfer(user, obj_id, from_wallet or "", to_wallet, new_owner.id)
+
         self.db.commit()
         self.db.refresh(obj)
         return obj
-
-    def get_recent_activity(self, user: User, limit: int = 10) -> list[dict]:
-        """Return recent actions across user's documents for dashboard."""
-        q = self.db.query(ActionHistory).join(DigitalObject)
-        if user.role != "admin":
-            q = q.filter(DigitalObject.owner_id == user.id)
-        actions = (
-            q.order_by(ActionHistory.performed_at.desc())
-            .limit(limit)
-            .all()
-        )
-        return [
-            {
-                "id": a.id,
-                "action_type": a.action_type,
-                "performed_at": a.performed_at,
-                "file_name": a.digital_object.file_name,
-                "object_id": a.digital_object_id,
-                "details": a.details,
-            }
-            for a in actions
-        ]
 

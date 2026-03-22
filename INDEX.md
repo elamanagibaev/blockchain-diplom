@@ -257,7 +257,6 @@ curl http://localhost:8000/api/health
 - `POST /files/upload` — Upload file
 - `GET /files` — List files
 - `GET /files/{id}` — File details
-- `GET /files/{id}/history` — Action history
 - `GET /files/metrics` — Dashboard metrics
 
 ### Verification

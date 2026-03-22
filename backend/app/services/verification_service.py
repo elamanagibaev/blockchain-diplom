@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
-from app.models.action_history import ActionHistory
 from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.models.verification_log import VerificationLog
@@ -31,16 +30,6 @@ class VerificationService:
                 notes=None if is_verified else "Hash not found in registry",
             )
         )
-
-        if obj:
-            self.db.add(
-                ActionHistory(
-                    digital_object_id=obj.id,
-                    action_type="VERIFY",
-                    performed_by_id=user.id if user else None,
-                    details="Verification request (off-chain)",
-                )
-            )
 
         self.db.commit()
         return sha, obj

@@ -16,7 +16,6 @@ from datetime import timedelta
 from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.models.user import User
-from app.services.audit_service import AuditService
 from app.utils.wallet import is_valid_address
 
 settings = get_settings()
@@ -122,8 +121,6 @@ def verify_signature_and_login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated",
         )
-    AuditService(db).log_login(user)
-    db.commit()
     from app.services.auth_service import AuthService
     token, expires_in = AuthService(db).create_login_token(user)
     return token, expires_in
