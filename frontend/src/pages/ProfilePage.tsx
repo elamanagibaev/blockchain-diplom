@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
-import { Spinner } from "../components/Spinner";
+import { Spinner } from "../components/ui/Spinner";
 
 type ProfileData = {
   id: string;

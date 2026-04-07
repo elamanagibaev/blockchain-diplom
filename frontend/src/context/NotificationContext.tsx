@@ -70,24 +70,9 @@ const NotificationItem: React.FC<{
   }, [notification.duration, onClose]);
 
   return (
-    <div
-      className="notification"
-      data-type={notification.type}
-      style={{
-        color: "#fff",
-        padding: "12px 16px",
-        borderRadius: "8px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
+    <div className="notification" data-type={notification.type}>
       <span>{notification.message}</span>
-      <button
-        className="btn btn-outline"
-        style={{ fontSize: 12, color: "#fff", borderColor: "#fff" }}
-        onClick={onClose}
-      >
+      <button type="button" className="notification-close" onClick={onClose} aria-label="Закрыть">
         ✕
       </button>
     </div>

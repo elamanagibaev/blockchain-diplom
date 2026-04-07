@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { FileTable, FileRow } from "../components/FileTable";
-import { Spinner } from "../components/Spinner";
+import { Spinner } from "../components/ui/Spinner";
 import { useNotification } from "../context/NotificationContext";
+import { Card } from "../components/ui/Card";
 
 export const MyFilesPage: React.FC = () => {
   const location = useLocation();
   const { notify } = useNotification();
-  const [items, setItems] = useState<FileRow[]>([]);
   const [filtered, setFiltered] = useState<FileRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -20,21 +20,17 @@ export const MyFilesPage: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const params: any = {};
+      const params: Record<string, string> = {};
       if (q) params.q = q;
       if (status && status !== "ALL") params.status = status;
       const res = await api.get<FileRow[]>("/files", { params });
-      setItems(res.data);
       setFiltered(res.data);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Ошибка загрузки списка");
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      setError(ax?.response?.data?.detail || "Ошибка загрузки списка");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSearch = (val: string) => {
-    setSearch(val);
   };
 
   const onSubmitForRegistration = async (id: string) => {
@@ -42,10 +38,11 @@ export const MyFilesPage: React.FC = () => {
     try {
       await api.post(`/files/${id}/submit-for-registration`);
       await load(search, statusFilter);
-      notify("success", "Документ отправлен на рассмотрение и отображается в общем реестре.");
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Ошибка отправки заявки";
-      setError(msg);
+      notify("success", "Документ отправлен на рассмотрение.");
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      const msg = ax?.response?.data?.detail || "Ошибка отправки заявки";
+      setError(typeof msg === "string" ? msg : "Ошибка отправки заявки");
       notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
     } finally {
       setLoadingRegister(null);
@@ -57,77 +54,72 @@ export const MyFilesPage: React.FC = () => {
   }, [search, statusFilter, location.key]);
 
   return (
-    <div className="page">
-      <div className="card">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>Мои патенты</h1>
-            <div className="muted">
-              Загруженные патентные документы. Фильтруйте по статусу и ищите по имени файла.
-            </div>
-          </div>
-          <button className="btn btn-muted" onClick={() => void load(search, statusFilter)}>
-            Обновить
-          </button>
+    <div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 16 }}>
+        <div>
+          <h1 className="page-title" style={{ marginBottom: 4 }}>
+            Мои документы
+          </h1>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>
+            Список загрузок, фильтр по статусу, переход к карточке.
+          </p>
         </div>
-        {error && (
-          <div className="bad" style={{ marginTop: 10 }}>
-            {error}
-          </div>
-        )}
-        <div className="row" style={{ marginTop: 12, gap: 12, alignItems: "flex-end" }}>
-          <div style={{ maxWidth: 320, width: "100%" }}>
+        <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+          Загрузить диплом
+        </Link>
+      </div>
+
+      <Card>
+        {error && <div className="bad" style={{ marginBottom: 12 }}>{error}</div>}
+        <div className="page-toolbar">
+          <div style={{ flex: "1 1 220px", minWidth: 0, maxWidth: 360 }}>
             <div className="label">Поиск</div>
             <input
               className="input"
-              placeholder="Поиск по имени файла..."
+              placeholder="Имя файла…"
               value={search}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div style={{ maxWidth: 220, width: "100%" }}>
+          <div style={{ flex: "0 1 220px", minWidth: 0 }}>
             <div className="label">Статус</div>
-            <select
-              className="input"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
+            <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="UPLOADED">Черновик</option>
-              <option value="PENDING_APPROVAL">На проверке</option>
-              <option value="REGISTERED_ON_CHAIN">Мой</option>
+              <option value="FROZEN">Черновик</option>
+              <option value="UNDER_REVIEW">На проверке</option>
+              <option value="APPROVED">Готов к регистрации</option>
+              <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
               <option value="REJECTED">Отклонён</option>
-              <option value="TRANSFERRED">Получен</option>
+              <option value="TRANSFERRED">Передан</option>
             </select>
           </div>
         </div>
-        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Нажмите «Рассмотреть» — документ появится в общем реестре и уйдёт администратору. После одобрения запись
-          появится в смарт-контракте.
-        </div>
-      </div>
+      </Card>
 
-      <div className="card">
+      <Card style={{ marginTop: 16 }}>
         {loading ? (
-          <div className="text-center" style={{ padding: "16px 0" }}>
-            <Spinner size={28} />
+          <div className="text-center" style={{ padding: 32 }}>
+            <Spinner size={32} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📁</div>
-            <div className="empty-state-title">Нет документов</div>
-            <div className="muted" style={{ marginTop: 4 }}>
-              Загрузите патентный документ, затем нажмите «Рассмотреть», чтобы документ попал в общий реестр.
+            <div className="empty-state-icon" aria-hidden>
+              📁
             </div>
-            <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
-              Загрузить патентный документ
+            <div style={{ fontWeight: 600 }}>Документов пока нет</div>
+            <p className="muted" style={{ marginTop: 8 }}>
+              Загрузите документ — он появится здесь.
+            </p>
+            <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ marginTop: 16, textDecoration: "none" }}>
+              Загрузить диплом
             </Link>
           </div>
         ) : (
-          <FileTable items={filtered} onSubmitForRegistration={onSubmitForRegistration} loadingId={loadingRegister} />
+          <div className="data-table-wrap">
+            <FileTable items={filtered} onSubmitForRegistration={onSubmitForRegistration} loadingId={loadingRegister} />
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
-

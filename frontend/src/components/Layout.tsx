@@ -1,46 +1,58 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { GraduationCap, Moon, Sun, ChevronDown, LogOut, User } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { Footer } from "./Footer";
 
 export const Layout: React.FC = () => {
+  const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setNavOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, []);
+
   const isActive = (path: string) =>
     location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
 
   const onLogout = () => {
+    setMenuOpen(false);
     logout();
     navigate("/login");
   };
+
+  const displayName = user?.email?.split("@")[0] || user?.email || "Пользователь";
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-inner">
           <Link to="/" className="app-brand" onClick={() => setNavOpen(false)}>
-            <div className="app-brand-mark">BP</div>
+            <div className="app-brand-mark">
+              <GraduationCap size={20} strokeWidth={2} />
+            </div>
             <div className="app-brand-text">
-              <div className="app-brand-title">BlockProof</div>
-              <div className="app-brand-subtitle">Патенты в блокчейне</div>
+              <div className="app-brand-title">ДипломЧейн</div>
+              <div className="app-brand-subtitle">Верификация на блокчейне</div>
             </div>
           </Link>
 
           <nav className={`app-nav ${navOpen ? "app-nav--open" : ""}`} id="app-main-nav">
-            <Link
-              to="/profile"
-              className={`app-nav-link ${isActive("/profile") ? "app-nav-link--active" : ""}`}
-              onClick={() => setNavOpen(false)}
-            >
-              Профиль
-            </Link>
             <Link
               to="/upload"
               className={`app-nav-link ${isActive("/upload") ? "app-nav-link--active" : ""}`}
@@ -53,7 +65,7 @@ export const Layout: React.FC = () => {
               className={`app-nav-link ${isActive("/files") ? "app-nav-link--active" : ""}`}
               onClick={() => setNavOpen(false)}
             >
-              Мои патенты
+              Мои документы
             </Link>
             <Link
               to="/global"
@@ -69,6 +81,13 @@ export const Layout: React.FC = () => {
             >
               Верификация
             </Link>
+            <Link
+              to="/profile"
+              className={`app-nav-link ${isActive("/profile") ? "app-nav-link--active" : ""}`}
+              onClick={() => setNavOpen(false)}
+            >
+              Профиль
+            </Link>
             {user?.role === "admin" && (
               <Link
                 to="/admin"
@@ -81,21 +100,43 @@ export const Layout: React.FC = () => {
           </nav>
 
           <div className="app-header-actions">
-            {user?.email && (
-              <div className="app-user-pill">
-                {user.email}
-                {user.wallet_address && (
-                  <span style={{ opacity: 0.7, fontSize: 11 }}>
-                    {" "}
-                    · {user.wallet_address.slice(0, 8)}…
-                  </span>
-                )}
-                {user.role && <span style={{ opacity: 0.8 }}> · {user.role}</span>}
-              </div>
-            )}
-            <button type="button" className="btn btn-outline btn-sm" onClick={onLogout}>
-              Выйти
+            <div className="app-user-menu-wrap" ref={menuRef}>
+              <button
+                type="button"
+                className="app-user-trigger"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-expanded={menuOpen}
+              >
+                <span className="app-user-avatar">{initial}</span>
+                <span className="app-user-email" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user?.email || "—"}
+                </span>
+                <ChevronDown size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
+              </button>
+              {menuOpen && (
+                <div className="app-dropdown">
+                  <Link to="/profile" onClick={() => setMenuOpen(false)}>
+                    <User size={14} style={{ marginRight: 8, verticalAlign: "middle" }} />
+                    Профиль
+                  </Link>
+                  <button type="button" onClick={onLogout}>
+                    <LogOut size={14} style={{ marginRight: 8, verticalAlign: "middle" }} />
+                    Выйти
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+              title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+
             <button
               type="button"
               className="app-nav-toggle"
@@ -113,33 +154,8 @@ export const Layout: React.FC = () => {
       </header>
 
       <main className="app-main">
-        <div className="page-container">
-          <section className="page-main">
-            <Outlet />
-          </section>
-          <aside className="page-sidebar">
-            <div className="page-sidebar-card">
-              <h3>О платформе</h3>
-              <p>
-                Защищённое хранение файлов и фиксация хэшей в блокчейне для проверки подлинности патентных
-                документов.
-              </p>
-              <ul className="page-sidebar-list">
-                <li>
-                  <span className="page-sidebar-dot" />
-                  Хэш фиксируется on-chain
-                </li>
-                <li>
-                  <span className="page-sidebar-dot" />
-                  Содержимое остаётся в off-chain хранилище
-                </li>
-                <li>
-                  <span className="page-sidebar-dot" />
-                  Запись в реестре устойчива к скрытым правкам
-                </li>
-              </ul>
-            </div>
-          </aside>
+        <div className="app-main-inner">
+          <Outlet />
         </div>
       </main>
 

@@ -12,6 +12,7 @@ from app.models.user import User
 settings = get_settings()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+oauth2_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -40,4 +41,19 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
+
+
+def get_optional_user(
+    token: str | None = Depends(oauth2_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not token:
+        return None
+    subject = verify_token(token)
+    if not subject:
+        return None
+    user = db.query(User).filter(User.id == subject).first()
+    if not user or not user.is_active:
+        return None
+    return user
 

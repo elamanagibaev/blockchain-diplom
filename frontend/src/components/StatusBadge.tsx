@@ -25,10 +25,14 @@ export function statusToSoftVariant(status: string): SoftBadgeVariant {
     case "REJECTED":
     case "NOT_VERIFIED":
     case "INVALID_HASH":
+    case "INVALID_ON_CHAIN":
       return "reject";
     case "PENDING_APPROVAL":
     case "PENDING_ON_CHAIN":
+    case "UNDER_REVIEW":
+    case "APPROVED":
       return "review";
+    case "FROZEN":
     case "UPLOADED":
     case "REGISTERED":
       return "muted";
@@ -40,9 +44,12 @@ export function statusToSoftVariant(status: string): SoftBadgeVariant {
 }
 
 const statusLabelsRu: Record<string, string> = {
+  FROZEN: "Заморожен",
   UPLOADED: "Загружен",
   REGISTERED: "Загружен",
   PENDING_APPROVAL: "На рассмотрении",
+  UNDER_REVIEW: "На рассмотрении",
+  APPROVED: "Готов к финальной регистрации",
   REGISTERED_ON_CHAIN: "В блокчейне",
   PENDING_ON_CHAIN: "Ожидает on-chain",
   VERIFIED: "Верифицирован",
@@ -57,10 +64,13 @@ const statusLabelsRu: Record<string, string> = {
 
 /** Подписи для вкладки «Мои патенты» + карточка документа / загрузка в том же контексте. */
 const patentLabelsRu: Partial<Record<string, string>> = {
+  FROZEN: "Черновик",
   UPLOADED: "Черновик",
   REGISTERED: "Черновик",
   PENDING_APPROVAL: "На проверке",
+  UNDER_REVIEW: "На проверке",
   PENDING_ON_CHAIN: "На проверке",
+  APPROVED: "Готов к финальной регистрации",
   REGISTERED_ON_CHAIN: "Мой",
   TRANSFERRED: "Получен",
 };

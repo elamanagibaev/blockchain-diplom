@@ -15,6 +15,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Alembic по умолчанию создаёт version_num VARCHAR(32); длинные revision id (>32 символов)
+    # дают StringDataRightTruncation при UPDATE после этой миграции — расширяем колонку первым шагом.
+    op.execute(
+        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"
+    )
     op.execute("DROP TABLE IF EXISTS action_history CASCADE")
     op.execute("DROP TABLE IF EXISTS audit_logs CASCADE")
 

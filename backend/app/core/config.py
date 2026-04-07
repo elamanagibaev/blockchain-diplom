@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     CONTRACT_OWNER_ADDRESS: Optional[str] = None
     CHAIN_ID: int = 31337
 
+    # Публичный URL фронтенда для ссылок verify / QR (без завершающего слэша)
+    PUBLIC_VERIFY_BASE_URL: str = "http://localhost:5173"
+
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 

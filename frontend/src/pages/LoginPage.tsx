@@ -5,6 +5,8 @@ import { useNotification } from "../context/NotificationContext";
 import { AuthLayout } from "../components/AuthLayout";
 import { getLoginHistory, addToLoginHistory } from "../utils/loginHistory";
 import { api } from "../api/client";
+import { Input } from "../components/ui/Input";
+import { Button } from "../components/ui/Button";
 
 type LoginTab = "email" | "wallet";
 
@@ -39,8 +41,9 @@ export const LoginPage: React.FC = () => {
       await login(email, password);
       addToLoginHistory(email);
       navigate("/");
-    } catch (err: any) {
-      const msg = typeof err?.response?.data?.detail === "string" ? err.response.data.detail : "Ошибка входа.";
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      const msg = typeof ax?.response?.data?.detail === "string" ? ax.response.data.detail : "Ошибка входа.";
       setError(msg);
       notify("error", msg);
     }
@@ -49,7 +52,7 @@ export const LoginPage: React.FC = () => {
   const submitWallet = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const eth = (window as any).ethereum;
+    const eth = (window as unknown as { ethereum?: { request: (a: { method: string }) => Promise<string[]> } }).ethereum;
     if (!eth) {
       setError("Установите MetaMask или другой Web3 кошелёк");
       notify("error", "MetaMask не найден");
@@ -58,7 +61,7 @@ export const LoginPage: React.FC = () => {
     setWalletLoading(true);
     try {
       const accounts = await eth.request({ method: "eth_requestAccounts" });
-      const addr = walletAddress.trim() || (accounts[0] as string);
+      const addr = walletAddress.trim() || accounts[0];
       if (!addr) {
         setError("Выберите кошелёк в MetaMask");
         return;
@@ -70,7 +73,7 @@ export const LoginPage: React.FC = () => {
       });
 
       const { ethers } = await import("ethers");
-      const provider = new ethers.BrowserProvider(eth);
+      const provider = new ethers.BrowserProvider(eth as never);
       const signer = await provider.getSigner();
       const signature = await signer.signMessage(challenge.message_to_sign);
 
@@ -82,8 +85,10 @@ export const LoginPage: React.FC = () => {
       await loginWithToken();
       navigate("/");
       notify("success", "Вход выполнен через кошелёк");
-    } catch (err: any) {
-      const msg = typeof err?.response?.data?.detail === "string" ? err.response.data.detail : "Ошибка входа через кошелёк";
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      const msg =
+        typeof ax?.response?.data?.detail === "string" ? ax.response.data.detail : "Ошибка входа через кошелёк";
       setError(msg);
       notify("error", msg);
     } finally {
@@ -92,112 +97,83 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout
-      title="Вход в BlockProof"
-      subtitle="Email/пароль или вход через кошелёк"
-    >
-      <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "1px solid var(--color-border)" }}>
+    <AuthLayout title="Вход" subtitle="Email и пароль или кошелёк">
+      <div className="tabs" style={{ marginBottom: 16 }}>
         <button
           type="button"
-          className="btn btn-muted"
-          style={{
-            border: "none",
-            borderRadius: 0,
-            borderBottom: tab === "email" ? "2px solid var(--color-primary)" : "2px solid transparent",
-            marginBottom: -1,
+          className={`tab ${tab === "email" ? "tab--active" : ""}`}
+          onClick={() => {
+            setTab("email");
+            setError(null);
           }}
-          onClick={() => { setTab("email"); setError(null); }}
         >
           Email
         </button>
         <button
           type="button"
-          className="btn btn-muted"
-          style={{
-            border: "none",
-            borderRadius: 0,
-            borderBottom: tab === "wallet" ? "2px solid var(--color-primary)" : "2px solid transparent",
-            marginBottom: -1,
+          className={`tab ${tab === "wallet" ? "tab--active" : ""}`}
+          onClick={() => {
+            setTab("wallet");
+            setError(null);
           }}
-          onClick={() => { setTab("wallet"); setError(null); }}
         >
           Кошелёк
         </button>
       </div>
 
       {tab === "email" ? (
-        <form onSubmit={submitEmail} className="grid" style={{ marginTop: 8 }}>
-          <div>
-            <div className="label">Email</div>
-            <input
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="patentee@example.com"
-            />
-          </div>
-          <div>
-            <div className="label">Пароль</div>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Введите пароль"
-            />
-          </div>
+        <form onSubmit={submitEmail} className="stack">
+          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
+          <Input
+            label="Пароль"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Пароль"
+            autoComplete="current-password"
+          />
           {error && <div className="bad">{error}</div>}
-          <button className="btn btn-primary" type="submit">
+          <Button type="submit" variant="primary" size="md">
             Войти
-          </button>
+          </Button>
           {history.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div className="label" style={{ fontSize: 12, marginBottom: 6 }}>Ранее входили:</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div>
+              <div className="label" style={{ fontSize: 12 }}>
+                Ранее входили:
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 6 }}>
                 {history.map((h) => (
-                  <button
-                    key={h.email}
-                    type="button"
-                    className="btn btn-muted btn-sm"
-                    onClick={() => setEmail(h.email)}
-                  >
+                  <button key={h.email} type="button" className="btn btn-muted btn-sm" onClick={() => setEmail(h.email)}>
                     {h.email}
                   </button>
                 ))}
               </div>
             </div>
           )}
-          <div className="muted">
-            Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-          </div>
+          <p className="muted" style={{ fontSize: 14 }}>
+            Нет аккаунта? <Link to="/register">Регистрация</Link>
+          </p>
         </form>
       ) : (
-        <form onSubmit={submitWallet} className="grid" style={{ marginTop: 8 }}>
-          <div>
-            <div className="label">Wallet address (или подключите MetaMask)</div>
-            <input
-              className="input"
-              value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              placeholder="0x..."
-            />
-            <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-              Сначала зарегистрируйтесь через email — кошелёк привязывается автоматически.
-            </div>
-          </div>
+        <form onSubmit={submitWallet} className="stack">
+          <Input
+            label="Адрес кошелька (или подключите MetaMask)"
+            value={walletAddress}
+            onChange={(e) => setWalletAddress(e.target.value)}
+            placeholder="0x…"
+          />
+          <p className="muted" style={{ fontSize: 12 }}>
+            Сначала зарегистрируйтесь через email — кошелёк можно привязать позже.
+          </p>
           {error && <div className="bad">{error}</div>}
-          <button className="btn btn-primary" type="submit" disabled={walletLoading}>
-            {walletLoading ? "Подписание…" : "Войти через кошелёк"}
-          </button>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Подпишите сообщение в MetaMask — вход без пароля.
-          </div>
-          <div className="muted">
-            Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-          </div>
+          <Button type="submit" variant="primary" loading={walletLoading} disabled={walletLoading}>
+            Войти через кошелёк
+          </Button>
+          <p className="muted" style={{ fontSize: 14 }}>
+            Нет аккаунта? <Link to="/register">Регистрация</Link>
+          </p>
         </form>
       )}
     </AuthLayout>
   );
 };
-

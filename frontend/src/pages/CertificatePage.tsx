@@ -3,11 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
-import { Spinner } from "../components/Spinner";
+import { Spinner } from "../components/ui/Spinner";
 import { getExplorerTxUrl } from "../utils/blockExplorer";
 
 type CertData = {
   is_verified: boolean;
+  verification_status?: string | null;
   digital_object_id?: string | null;
   file_name: string | null;
   description?: string | null;
@@ -114,6 +115,32 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
   }
 
   if (!data.is_verified) {
+    const invalidOnChain =
+      data.verification_status === "INVALID" || data.integrity_status === "INVALID_ON_CHAIN";
+    if (invalidOnChain && data.digital_object_id) {
+      return (
+        <div className="page">
+          <div className="card certificate-not-found">
+            <div className="certificate-status-block certificate-status-block--error">
+              <span className="certificate-status-icon">⚠</span>
+              <h2>Хэш найден, on-chain не подтверждён</h2>
+              <p className="muted">
+                Документ есть в системе, но не прошёл финальную регистрацию в блокчейне (или статус не REGISTERED_ON_CHAIN).
+              </p>
+              {data.file_name && <p>Файл: {data.file_name}</p>}
+              {data.status && (
+                <p className="muted">
+                  Статус: <code>{data.status}</code>
+                </p>
+              )}
+              <Link to="/verify" className="btn btn-outline" style={{ marginTop: 16 }}>
+                Проверить другой документ
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="page">
         <div className="card certificate-not-found">
@@ -123,7 +150,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
             <p className="muted">
               {data.integrity_status === "INVALID_HASH"
                 ? "Некорректный формат SHA-256."
-                : "Документ с таким хэшем отсутствует в реестре BlockProof."}
+                : "Документ с таким хэшем отсутствует в реестре или не прошёл проверку подлинности."}
             </p>
             <Link to="/verify" className="btn btn-outline" style={{ marginTop: 16 }}>
               Проверить другой документ
@@ -186,7 +213,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
               )}
               <dt>Статус</dt>
               <dd>
-                <StatusBadge status={data.status || "REGISTERED"} />
+                <StatusBadge status={data.status || "FROZEN"} />
               </dd>
             </dl>
           </section>

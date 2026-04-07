@@ -1,5 +1,7 @@
 import React from "react";
-import { Footer } from "./Footer";
+import { Link } from "react-router-dom";
+import { GraduationCap, Moon, Sun } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
 
 type AuthLayoutProps = {
   title: string;
@@ -8,14 +10,31 @@ type AuthLayoutProps = {
 };
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, children }) => {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="auth-shell">
+      <div className="auth-top">
+        <Link to="/login" className="app-brand">
+          <div className="app-brand-mark">
+            <GraduationCap size={20} strokeWidth={2} />
+          </div>
+          <div className="app-brand-text">
+            <div className="app-brand-title">ДипломЧейн</div>
+          </div>
+        </Link>
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
       <main className="auth-main">
         <div className="auth-card">
-          <div style={{ marginBottom: 16 }}>
-            <div className="badge badge-soft-blue badge-pill" style={{ marginBottom: 8 }}>
-              BlockProof — Blockchain platform for data verification
-            </div>
+          <div style={{ marginBottom: 20 }}>
             <h1 className="auth-header-title">{title}</h1>
             {subtitle && <div className="auth-header-subtitle">{subtitle}</div>}
           </div>
@@ -23,10 +42,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
         </div>
       </main>
       <div className="auth-footer">
-        <span className="footer-brand">BlockProof</span>
-        <span className="footer-project">Дипломный проект Агибаев Еламан и Кубышкин Константин</span>
+        <span>ДипломЧейн · верификация дипломов на блокчейне</span>
       </div>
     </div>
   );
 };
-

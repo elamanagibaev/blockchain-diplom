@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useNotification } from "../context/NotificationContext";
 import { AuthLayout } from "../components/AuthLayout";
+import { Input } from "../components/ui/Input";
+import { Button } from "../components/ui/Button";
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -49,8 +51,9 @@ export const RegisterPage: React.FC = () => {
       });
       notify("success", "Аккаунт создан. Войдите в систему.");
       navigate("/login");
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string | { msg?: string }[] } } };
+      const detail = ax?.response?.data?.detail;
       let msg = "Не удалось зарегистрироваться. Проверьте данные.";
       if (typeof detail === "string") msg = detail;
       else if (Array.isArray(detail)) msg = detail[0]?.msg || "Ошибка при регистрации";
@@ -60,48 +63,25 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout
-      title="Регистрация патентообладателя"
-      subtitle="При создании аккаунта генерируется кошелёк для привязки патентных документов в блокчейне"
-    >
-      <form onSubmit={submit} className="grid" style={{ marginTop: 8 }}>
-        <div>
-          <div className="label">Email</div>
-          <input
-            className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ip@company.ru"
-          />
-        </div>
-        <div>
-          <div className="label">ФИО (опционально)</div>
-          <input
-            className="input"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Иванов И.И."
-          />
-        </div>
-        <div>
-          <div className="label">Пароль (мин. 8 символов)</div>
-          <input
-            className="input"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Надёжный пароль"
-          />
-        </div>
+    <AuthLayout title="Регистрация" subtitle="Создайте аккаунт для загрузки и верификации дипломов">
+      <form onSubmit={submit} className="stack">
+        <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@university.ru" autoComplete="email" />
+        <Input label="ФИО (опционально)" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Иванов И.И." />
+        <Input
+          label="Пароль (мин. 8 символов, буквы разного регистра и цифра)"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+        />
         {error && <div className="bad">{error}</div>}
-        <button className="btn btn-primary" type="submit">
+        <Button type="submit" variant="primary">
           Создать аккаунт
-        </button>
-        <div className="muted">
+        </Button>
+        <p className="muted" style={{ fontSize: 14 }}>
           Уже есть аккаунт? <Link to="/login">Войти</Link>
-        </div>
+        </p>
       </form>
     </AuthLayout>
   );
 };
-

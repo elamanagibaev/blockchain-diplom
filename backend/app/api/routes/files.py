@@ -4,19 +4,38 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Body
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_admin, get_current_user, get_db
+from app.constants.lifecycle import LifecycleStatus
 from app.models.blockchain_event import BlockchainEvent
+from app.models.digital_object import DigitalObject
+from app.models.document_event import DocumentEvent
 from app.models.user import User
 from app.schemas.files import (
     DigitalObjectCreateResponse,
     DigitalObjectRead,
+    DocumentEventRead,
     Metrics,
 )
+from app.services.approval_workflow_service import ApprovalWorkflowService
+from app.services.blockchain_service import BlockchainService
 from app.services.file_service import FileService
+from app.services.pipeline_service import PipelineService
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+class StudentWalletBody(BaseModel):
+    student_wallet_address: str
+
+
+def _require_roles(user: User, allowed: tuple[str, ...]) -> None:
+    if user.role == "admin":
+        return
+    if user.role not in allowed:
+        raise HTTPException(status_code=403, detail="Недостаточно прав для этой операции")
 
 
 @router.post("/upload", response_model=DigitalObjectCreateResponse)
@@ -74,6 +93,12 @@ def _to_read(
     fr, to = (None, None)
     if last_transfer:
         fr, to = last_transfer
+    hist = getattr(o, "stage_history", None)
+    if not isinstance(hist, list):
+        hist = []
+    ps = getattr(o, "processing_stage", None)
+    if ps is None:
+        ps = PipelineService.compute_processing_stage(o)
     return DigitalObjectRead(
         id=o.id,
         file_name=o.file_name,
@@ -94,6 +119,12 @@ def _to_read(
         blockchain_registered_at=o.blockchain_registered_at,
         last_transfer_from_wallet=fr,
         last_transfer_to_wallet=to,
+        processing_stage=ps,
+        stage_history=hist,
+        department_approved_at=getattr(o, "department_approved_at", None),
+        deanery_approved_at=getattr(o, "deanery_approved_at", None),
+        ai_check_status=getattr(o, "ai_check_status", None) or "skipped",
+        student_wallet_address=getattr(o, "student_wallet_address", None),
     )
 
 
@@ -155,6 +186,110 @@ def submit_for_registration(
     """Подача заявки на регистрацию в блокчейне (одобрение администратором)."""
     obj = FileService(db).submit_for_registration(current_user, obj_id)
     return {"message": "Заявка на регистрацию отправлена", "status": obj.status}
+
+
+@router.post("/{obj_id}/approve/department")
+def approve_department_pipeline(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Этап 3 — подтверждение кафедры (роль department или admin)."""
+    _require_roles(current_user, ("department",))
+    obj = FileService(db).get_object(current_user, obj_id)
+    ApprovalWorkflowService(db).approve_current_stage(obj, current_user)
+    db.refresh(obj)
+    return {"message": "Этап кафедры подтверждён", "status": obj.status}
+
+
+@router.post("/{obj_id}/approve/deanery")
+def approve_deanery_pipeline(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Этап 3 — подтверждение деканата (роли dean / registrar или admin)."""
+    _require_roles(current_user, ("dean", "registrar"))
+    obj = FileService(db).get_object(current_user, obj_id)
+    ApprovalWorkflowService(db).approve_current_stage(obj, current_user)
+    db.refresh(obj)
+    return {"message": "Этап деканата подтверждён", "status": obj.status}
+
+
+@router.post("/{obj_id}/register")
+def register_document_on_chain(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Этап 4 — финальная регистрация в смарт-контракте (только admin)."""
+    obj = (
+        db.query(DigitalObject)
+        .options(joinedload(DigitalObject.owner))
+        .filter(DigitalObject.id == obj_id)
+        .first()
+    )
+    if not obj:
+        raise HTTPException(status_code=404, detail="Object not found")
+    if obj.status != LifecycleStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Документ должен быть APPROVED после согласований, текущий статус: {obj.status}",
+        )
+    owner = obj.owner
+    if not owner:
+        raise HTTPException(status_code=400, detail="Document has no owner")
+    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin)
+    try:
+        FileService(db).migrate_file_to_minio(obj)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"tx_hash": tx_hash, "object_id": obj.blockchain_object_id, "status": "REGISTERED_ON_CHAIN"}
+
+
+@router.post("/{obj_id}/assign-owner")
+def assign_owner_pipeline(
+    obj_id: UUID,
+    body: StudentWalletBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Этап 5 — привязка кошелька выпускника."""
+    obj = FileService(db).assign_student_wallet(current_user, obj_id, body.student_wallet_address)
+    return {
+        "message": "Кошелёк привязан",
+        "student_wallet_address": obj.student_wallet_address,
+        "status": obj.status,
+    }
+
+
+@router.get("/{obj_id}/events", response_model=list[DocumentEventRead])
+def list_document_events(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Журнал событий документа (владелец или администратор)."""
+    FileService(db).get_object(current_user, obj_id, require_owner=True)
+    rows = (
+        db.query(DocumentEvent)
+        .filter(DocumentEvent.document_id == obj_id)
+        .order_by(DocumentEvent.timestamp.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        DocumentEventRead(
+            id=r.id,
+            action=r.action,
+            timestamp=r.timestamp,
+            user_id=r.user_id,
+            metadata=r.event_metadata,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/{obj_id}", response_model=DigitalObjectRead)

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { FileText, ShieldCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { MetricCard } from "../components/MetricCard";
-import { Spinner } from "../components/Spinner";
+import { Spinner } from "../components/ui/Spinner";
 import { FileTable, FileRow } from "../components/FileTable";
 import { api } from "../api/client";
+import { Card } from "../components/ui/Card";
 
 type Metrics = {
   total: number;
@@ -14,29 +16,46 @@ type Metrics = {
   invalid: number;
 };
 
+type PendingRow = { id: string; file_name: string };
+
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [recent, setRecent] = useState<FileRow[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingReview, setPendingReview] = useState(0);
+  const [readyFinalMine, setReadyFinalMine] = useState(0);
+  const [adminFinalQueue, setAdminFinalQueue] = useState(0);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [metricsRes, filesRes] = await Promise.all([
-        api.get<Metrics>("/files/metrics"),
-        api.get<FileRow[]>("/files"),
-      ]);
+      const metricsRes = await api.get<Metrics>("/files/metrics");
       setMetrics(metricsRes.data);
-      const sorted = [...filesRes.data].sort(
+
+      const filesRes = await api.get<FileRow[]>("/files");
+      const files = Array.isArray(filesRes.data) ? filesRes.data : [];
+      const sorted = [...files].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       setRecent(sorted.slice(0, 8));
-      setPendingCount(
-        Array.isArray(filesRes.data) ? filesRes.data.filter((f: FileRow) => f.status === "PENDING_APPROVAL").length : 0
+
+      setPendingReview(
+        files.filter((f) => f.status === "UNDER_REVIEW" || f.status === "PENDING_APPROVAL").length
       );
+      setReadyFinalMine(files.filter((f) => f.status === "APPROVED" && !f.blockchain_tx_hash).length);
+
+      if (user?.role === "admin") {
+        try {
+          const pend = await api.get<PendingRow[]>("/admin/documents/pending");
+          setAdminFinalQueue(Array.isArray(pend.data) ? pend.data.length : 0);
+        } catch {
+          setAdminFinalQueue(0);
+        }
+      } else {
+        setAdminFinalQueue(0);
+      }
     } catch {
       setMetrics(null);
       setRecent([]);
@@ -48,9 +67,9 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [user?.id, user?.role]);
 
-  const pendingOnChain =
+  const pendingOffChain =
     metrics && typeof metrics.total === "number" && typeof metrics.on_chain === "number"
       ? Math.max(metrics.total - metrics.on_chain, 0)
       : 0;
@@ -58,101 +77,110 @@ export const DashboardPage: React.FC = () => {
   const displayName = user?.email?.split("@")[0] || "пользователь";
 
   return (
-    <div className="page dashboard-page">
-      <div className="dashboard-hero">
-        <div className="card dashboard-hero-main">
-          <div className="dashboard-hero-main-inner">
-            <div className="badge badge-accent badge-pill">Блокчейн-реестр</div>
-            <h1 className="dashboard-hero-title">Добро пожаловать, {displayName}</h1>
-            <p className="dashboard-hero-desc">
-              Регистрация и хранение патентных документов: хэш фиксируется в блокчейне, файл остаётся в защищённом
-              хранилище.
-            </p>
-            <div className="dashboard-hero-actions">
-              <Link to="/upload" className="btn btn-primary">
-                Загрузить документ
-              </Link>
-              <Link to="/verify" className="btn btn-outline">
-                Верифицировать по хэшу
-              </Link>
-            </div>
-          </div>
+    <div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 16 }}>
+        <div>
+          <h1 className="page-title" style={{ marginBottom: 4 }}>
+            Панель · {displayName}
+          </h1>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>
+            Сводка по документам и блокчейну.
+          </p>
         </div>
+        <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+          Загрузить диплом
+        </Link>
       </div>
+
+      <Card style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Верификация дипломов на блокчейне</h2>
+        <p className="muted" style={{ marginBottom: 16, maxWidth: 560 }}>
+          Загрузите документ, пройдите согласование — хэш будет зафиксирован в смарт-контракте. Проверка подлинности доступна
+          любому пользователю.
+        </p>
+        <div className="dashboard-hero-actions">
+          <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+            Загрузить документ
+          </Link>
+          <Link to="/verify" className="ui-btn ui-btn--secondary ui-btn--md" style={{ textDecoration: "none" }}>
+            Проверить документ
+          </Link>
+        </div>
+      </Card>
 
       <div className="dashboard-stats-grid">
-        <MetricCard title="Всего документов" value={loading ? "—" : (metrics?.total ?? 0)} />
-        <MetricCard title="В блокчейне" value={loading ? "—" : (metrics?.on_chain ?? 0)} color="var(--color-success)" />
-        <MetricCard title="На рассмотрении" value={loading ? "—" : pendingCount} color="var(--color-warning)" />
+        <MetricCard title="Всего документов" value={loading ? "—" : metrics?.total ?? 0} icon={<FileText size={18} />} />
         <MetricCard
-          title="Без on-chain записи"
-          value={loading ? "—" : pendingOnChain}
-          color="var(--color-muted)"
+          title="В блокчейне"
+          value={loading ? "—" : metrics?.on_chain ?? 0}
+          color="var(--success)"
+          icon={<ShieldCheck size={18} />}
         />
+        <MetricCard
+          title="На согласовании"
+          value={loading ? "—" : pendingReview}
+          color="var(--warning)"
+        />
+        <MetricCard title="Без on-chain" value={loading ? "—" : pendingOffChain} color="var(--text-muted)" />
       </div>
 
-      {user?.wallet_address && (
-        <div className="card dashboard-wallet-card">
-          <div className="dashboard-wallet-inner">
-            <div>
-              <div className="label">Ваш кошелёк</div>
-              <code className="wallet-address">{user.wallet_address}</code>
-            </div>
-            <Link to="/profile" className="btn btn-outline btn-sm">
-              Открыть профиль
-            </Link>
-          </div>
-        </div>
-      )}
+      <div className="row" style={{ gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+        <Card style={{ flex: "1 1 200px" }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Готовы к финальной регистрации</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{loading ? "—" : readyFinalMine}</div>
+        </Card>
+        {user?.role === "admin" && (
+          <Card style={{ flex: "1 1 200px" }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Очередь админа</div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{loading ? "—" : adminFinalQueue}</div>
+          </Card>
+        )}
+      </div>
 
-      <div className="dashboard-main-grid">
-        <div className="card dashboard-section" style={{ gridColumn: "1 / -1" }}>
-          <div className="section-header">
-            <h2 className="section-title">Последние документы</h2>
-            <Link to="/files" className="btn btn-outline btn-sm">
-              Все документы
+      <div className="dashboard-two-col">
+        <Card>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700 }}>Недавние документы</h2>
+            <Link to="/files" className="muted" style={{ fontSize: 14 }}>
+              Все документы →
             </Link>
           </div>
           {loading ? (
-            <div className="section-loading">
-              <Spinner size={24} />
+            <div className="text-center" style={{ padding: 24 }}>
+              <Spinner size={28} />
             </div>
           ) : recent.length ? (
-            <div className="table-scroll">
+            <div className="data-table-wrap">
               <FileTable items={recent} />
             </div>
           ) : (
-            <div className="section-empty muted">Пока нет загруженных документов</div>
+            <div className="empty-state">
+              <div className="empty-state-icon" aria-hidden>
+                📄
+              </div>
+              <div style={{ fontWeight: 600 }}>Документов пока нет</div>
+              <Link to="/upload" style={{ display: "inline-block", marginTop: 12 }}>
+                Загрузить диплом
+              </Link>
+            </div>
           )}
-        </div>
-      </div>
+        </Card>
 
-      <div className="card dashboard-section">
-        <h2 className="section-title" style={{ marginBottom: 16 }}>
-          Быстрые действия
-        </h2>
-        <div className="services-grid">
-          <Link to="/upload" className="service-card">
-            <div className="service-card-icon">↑</div>
-            <h3 className="service-card-title">Загрузка</h3>
-            <p className="service-card-desc">Добавить патентный документ</p>
-          </Link>
-          <Link to="/verify" className="service-card">
-            <div className="service-card-icon">✓</div>
-            <h3 className="service-card-title">Верификация</h3>
-            <p className="service-card-desc">Проверить хэш в реестре</p>
-          </Link>
-          <Link to="/files" className="service-card">
-            <div className="service-card-icon">📁</div>
-            <h3 className="service-card-title">Мои патенты</h3>
-            <p className="service-card-desc">Список и статусы</p>
-          </Link>
-          <Link to="/global" className="service-card">
-            <div className="service-card-icon">🌐</div>
-            <h3 className="service-card-title">Общий реестр</h3>
-            <p className="service-card-desc">Поиск по сети</p>
-          </Link>
-        </div>
+        <Card>
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Как это работает</h3>
+          <ol style={{ paddingLeft: 18, color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
+            <li style={{ marginBottom: 8 }}>Загрузка и фиксация хэша</li>
+            <li style={{ marginBottom: 8 }}>Проверка ИИ (опционально)</li>
+            <li style={{ marginBottom: 8 }}>Экспертное согласование</li>
+            <li style={{ marginBottom: 8 }}>Регистрация в реестре</li>
+            <li>Закрепление за владельцем и QR</li>
+          </ol>
+          {user?.role === "admin" && (
+            <Link to="/admin" className="ui-btn ui-btn--primary ui-btn--md" style={{ display: "block", textAlign: "center", marginTop: 12, textDecoration: "none" }}>
+              Админ-панель
+            </Link>
+          )}
+        </Card>
       </div>
     </div>
   );

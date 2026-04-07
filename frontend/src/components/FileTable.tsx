@@ -12,12 +12,19 @@ export type FileRow = {
   blockchain_tx_hash?: string | null;
 };
 
-import { StatusBadge } from "./StatusBadge";
-import { Spinner } from "./Spinner";
+import { DocumentStatusBadge } from "./DocumentStatusBadge";
+import { Spinner } from "./ui/Spinner";
 import { BlockchainOnChainIcon } from "./BlockchainOnChainIcon";
 
-const canSubmit = (status: string, hasTx: boolean) =>
-  !hasTx && ["UPLOADED", "REGISTERED", "REJECTED"].includes(status);
+/** Legacy: UPLOADED / REGISTERED без tx → показываем как FROZEN («черновик»). */
+export function patentDisplayStatus(status: string, hasTx: boolean): string {
+  if (!hasTx && (status === "REGISTERED" || status === "UPLOADED")) return "FROZEN";
+  return status;
+}
+
+export function canSubmitForRegistration(status: string, hasTx: boolean): boolean {
+  return !hasTx && ["FROZEN", "UPLOADED", "REGISTERED", "REJECTED"].includes(status);
+}
 
 function documentDisplayName(f: FileRow): string {
   const d = f.description?.trim();
@@ -36,8 +43,7 @@ export const FileTable: React.FC<{
     return <div className="timeline-empty">Нет документов для отображения.</div>;
   }
   return (
-    <div className="table-scroll">
-    <table>
+    <table className="w-full">
       <thead>
         <tr>
           <th>Документ</th>
@@ -50,7 +56,7 @@ export const FileTable: React.FC<{
       <tbody>
         {items.map((f) => {
           const hasTx = Boolean(f.blockchain_tx_hash);
-          const showSubmit = canSubmit(f.status, hasTx);
+          const showSubmit = canSubmitForRegistration(f.status, hasTx);
           const name = documentDisplayName(f);
           const missingDescription = !f.description?.trim();
           return (
@@ -64,10 +70,7 @@ export const FileTable: React.FC<{
                 </div>
               </td>
               <td>
-                <StatusBadge
-                  labelPreset="patents"
-                  status={f.status === "REGISTERED" && !hasTx ? "UPLOADED" : f.status}
-                />
+                <DocumentStatusBadge status={f.status} onChain={hasTx} />
               </td>
               <td>{new Date(f.created_at).toLocaleString()}</td>
               <td>
@@ -94,6 +97,5 @@ export const FileTable: React.FC<{
         })}
       </tbody>
     </table>
-    </div>
   );
 };

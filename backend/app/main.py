@@ -9,6 +9,7 @@ from app.api.routes.verification import router as verification_router
 from app.api.routes.blockchain import router as blockchain_router
 from app.api.routes.health import router as health_router
 from app.api.routes.admin import router as admin_router
+from app.api.routes.approval import router as approval_router
 settings = get_settings()
 setup_logging()
 
@@ -34,3 +35,4 @@ app.include_router(files_router, prefix=settings.API_V1_STR)
 app.include_router(verification_router, prefix=settings.API_V1_STR)
 app.include_router(blockchain_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
+app.include_router(approval_router, prefix=settings.API_V1_STR)

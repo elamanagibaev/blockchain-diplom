@@ -13,7 +13,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, colo
       {icon && <div className="metric-card-icon">{icon}</div>}
       <div className="metric-card-content">
         <div className="metric-card-label">{title}</div>
-        <div className="metric-card-value" style={{ color: color || "var(--color-text)" }}>{value}</div>
+        <div className="metric-card-value" style={{ color: color || "var(--text)" }}>
+          {value}
+        </div>
       </div>
     </div>
   );

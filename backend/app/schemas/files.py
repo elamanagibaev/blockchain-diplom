@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DigitalObjectCreateResponse(BaseModel):
@@ -28,6 +29,13 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     # Заполняется только для GET /files/global — последняя передача в блокчейне
     last_transfer_from_wallet: str | None = None
     last_transfer_to_wallet: str | None = None
+    # 5-этапный pipeline (диплом / документооборот)
+    processing_stage: int | None = None
+    stage_history: list[dict[str, Any]] = Field(default_factory=list)
+    department_approved_at: datetime | None = None
+    deanery_approved_at: datetime | None = None
+    ai_check_status: str = "skipped"
+    student_wallet_address: str | None = None
 
 
 class Metrics(BaseModel):
@@ -35,3 +43,11 @@ class Metrics(BaseModel):
     on_chain: int
     verified: int
     invalid: int
+
+
+class DocumentEventRead(BaseModel):
+    id: UUID
+    action: str
+    timestamp: datetime
+    user_id: UUID | None = None
+    metadata: dict | None = None

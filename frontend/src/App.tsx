@@ -14,12 +14,15 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { WalletProfileViewPage } from "./pages/WalletProfileViewPage";
 import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 import { CertificatePage } from "./pages/CertificatePage";
+import { VerifyDocPage } from "./pages/VerifyDocPage";
 
 const NotFoundPage: React.FC = () => (
-  <div className="page" style={{ textAlign: "center", paddingTop: 48 }}>
+  <div style={{ textAlign: "center", paddingTop: 48, padding: 24 }}>
     <h1 style={{ marginBottom: 8 }}>404</h1>
     <p className="muted">Страница не найдена</p>
-    <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>На главную</Link>
+    <Link to="/" className="btn btn-primary" style={{ marginTop: 16, display: "inline-block" }}>
+      На главную
+    </Link>
   </div>
 );
 
@@ -47,6 +50,7 @@ export const App: React.FC = () => {
     },
     { path: "/login", element: <LoginPage /> },
     { path: "/register", element: <RegisterPage /> },
+    { path: "/verify/doc/:docId", element: <VerifyDocPage /> },
     { path: "/verify/hash/:hash", element: <CertificatePage mode="hash" /> },
     { path: "*", element: <NotFoundPage /> }
   ]);

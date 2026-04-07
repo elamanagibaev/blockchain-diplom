@@ -17,8 +17,13 @@ from app.storage.base import StorageBackend
 from app.storage.local_storage import LocalStorageBackend
 from app.storage.minio_storage import MinioStorageBackend
 from app.utils.hashing import sha256_file
+from app.constants.document_events import DocumentEventAction
+from app.constants.lifecycle import LifecycleStatus
 from app.models.verification_log import VerificationLog
 from app.models.blockchain_event import BlockchainEvent
+from app.services.document_event_service import DocumentEventService
+from app.services.approval_workflow_service import ApprovalWorkflowService
+from app.services.pipeline_service import PipelineService
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -141,9 +146,28 @@ class FileService:
             document_type=doc_type,
             owner_wallet_address=user.wallet_address,
             visibility="public",
-            status="UPLOADED",
+            status=LifecycleStatus.FROZEN.value,
         )
         self.db.add(obj)
+        self.db.flush()
+        ev = DocumentEventService(self.db)
+        ev.record(
+            document_id=obj.id,
+            user_id=user.id,
+            action=DocumentEventAction.UPLOAD.value,
+            metadata={
+                "file_name": filename,
+                "mime_type": mime,
+                "size_bytes": len(raw),
+            },
+        )
+        ev.record(
+            document_id=obj.id,
+            user_id=user.id,
+            action=DocumentEventAction.FREEZE.value,
+            metadata={"sha256_hash": sha},
+        )
+        PipelineService(self.db).on_upload_fixed(obj, user.id)
         self.db.commit()
         self.db.refresh(obj)
         return obj
@@ -165,8 +189,12 @@ class FileService:
     ) -> list[DigitalObject]:
         """List all documents for global patent registry with search and filters."""
         query = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
-        # До нажатия «Рассмотреть» документ только загружен (UPLOADED) и не виден в общем реестре
-        query = query.filter(DigitalObject.status != "UPLOADED")
+        # До отправки на рассмотрение документ в FROZEN / UPLOADED и не виден в общем реестре
+        query = query.filter(
+            DigitalObject.status.notin_(
+                [LifecycleStatus.FROZEN.value, LifecycleStatus.UPLOADED.value]
+            )
+        )
         if q_search:
             ql = q_search.lower()
             query = query.filter(
@@ -208,22 +236,38 @@ class FileService:
         obj = self.get_object(user, obj_id, require_owner=True)
         if obj.blockchain_tx_hash:
             raise HTTPException(status_code=400, detail="Документ уже зарегистрирован в блокчейне")
-        if obj.status not in ("UPLOADED", "REGISTERED", "REJECTED"):
+        allowed = (
+            LifecycleStatus.FROZEN.value,
+            LifecycleStatus.UPLOADED.value,
+            "REGISTERED",  # legacy
+            LifecycleStatus.REJECTED.value,
+        )
+        if obj.status not in allowed:
             raise HTTPException(
                 status_code=400,
-                detail="Можно подать заявку только для загруженных или отклонённых документов",
+                detail="Можно подать заявку только для документов в статусе заморозки или после отклонения",
             )
-        obj.status = "PENDING_APPROVAL"
+        obj.status = LifecycleStatus.UNDER_REVIEW.value
+        workflow = ApprovalWorkflowService(self.db)
+        workflow.ensure_stage_definitions()
+        workflow.reset_document_actions(obj.id)
+        DocumentEventService(self.db).record(
+            document_id=obj.id,
+            user_id=user.id,
+            action=DocumentEventAction.APPROVAL.value,
+            metadata={"step": "submit_for_review", "workflow": "multi_stage"},
+        )
+        PipelineService(self.db).on_submit_for_review(obj, user.id)
         self.db.commit()
         self.db.refresh(obj)
         return obj
 
     def list_pending_registrations(self) -> list[DigitalObject]:
-        """List documents with PENDING_APPROVAL for admin."""
+        """List documents that fully passed internal review and await on-chain registration."""
         return (
             self.db.query(DigitalObject)
             .options(joinedload(DigitalObject.owner))
-            .filter(DigitalObject.status == "PENDING_APPROVAL")
+            .filter(DigitalObject.status == LifecycleStatus.APPROVED.value)
             .order_by(DigitalObject.created_at.desc())
             .all()
         )
@@ -354,7 +398,7 @@ class FileService:
 
         obj.owner_id = new_owner.id
         obj.owner_wallet_address = to_wallet
-        obj.status = "TRANSFERRED"
+        obj.status = LifecycleStatus.TRANSFERRED.value
 
         self.db.add(
             BlockchainEvent(
@@ -366,7 +410,36 @@ class FileService:
                 initiator_user_id=user.id,
             )
         )
+        DocumentEventService(self.db).record(
+            document_id=obj.id,
+            user_id=user.id,
+            action=DocumentEventAction.APPROVAL.value,
+            metadata={
+                "kind": "ownership_transfer",
+                "tx_hash": tx_hash,
+                "from_wallet": from_wallet,
+                "to_wallet": to_wallet,
+            },
+        )
 
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def assign_student_wallet(self, actor: User, obj_id: UUID, wallet_address: str) -> DigitalObject:
+        """Этап 5: привязка кошелька выпускника (владелец или администратор)."""
+        raw = (wallet_address or "").strip()
+        if len(raw) < 10 or not raw.startswith("0x"):
+            raise HTTPException(status_code=400, detail="Некорректный адрес кошелька")
+        obj = self.get_object(actor, obj_id)
+        if actor.role != "admin" and obj.owner_id != actor.id:
+            raise HTTPException(status_code=403, detail="Только владелец или администратор")
+        if obj.status != LifecycleStatus.REGISTERED_ON_CHAIN.value:
+            raise HTTPException(
+                status_code=400,
+                detail="Привязка доступна после регистрации в реестре (REGISTERED_ON_CHAIN)",
+            )
+        PipelineService(self.db).on_assign_student(obj, raw, actor.id)
         self.db.commit()
         self.db.refresh(obj)
         return obj

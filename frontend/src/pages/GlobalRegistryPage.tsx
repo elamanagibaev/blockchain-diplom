@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
-import { Spinner } from "../components/Spinner";
+import { Spinner } from "../components/ui/Spinner";
 
 type DocRow = {
   id: string;
@@ -109,60 +109,65 @@ export const GlobalRegistryPage: React.FC = () => {
   }, [search, statusFilter, ownerWallet, txHashFilter, sortBy, sortOrder]);
 
   return (
-    <div className="page">
+    <div className="page global-registry-page">
       <PageHeader
-        title="Общая база патентов и документов"
-        subtitle="Все документы, зарегистрированные в платформе"
+        title="Общий реестр"
+        subtitle="Все документы, попавшие в платформу (включая на согласовании)"
       />
 
-      <div className="card">
-        <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+      <div className="card card--subtle registry-filters">
+        <div className="ui-card-head" style={{ marginBottom: 12 }}>
           <div>
-            <div className="label">Поиск и фильтры</div>
-            <div className="muted" style={{ fontSize: 12 }}>
+            <h2 className="ui-card-title">Поиск и фильтры</h2>
+            <p className="ui-card-desc" style={{ maxWidth: "none" }}>
               По клику на кошелёк открывается карточка пользователя, если адрес есть в системе.
-            </div>
+            </p>
           </div>
           <button type="button" className="btn btn-muted btn-sm" onClick={() => void load()}>
             Обновить
           </button>
         </div>
-        <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ minWidth: 240 }}>
+        <div className="page-toolbar" style={{ marginTop: 0 }}>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <div className="label">Запрос</div>
             <input
               className="input"
-              placeholder="Название или поисковый запрос"
+              placeholder="Название или текст"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div style={{ minWidth: 180 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+            <div className="label">Кошелёк владельца</div>
             <input
               className="input"
-              placeholder="Фильтр по кошельку"
+              placeholder="Фильтр по адресу"
               value={ownerWallet}
               onChange={(e) => setOwnerWallet(e.target.value)}
             />
           </div>
-          <div style={{ minWidth: 160 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+            <div className="label">Транзакция</div>
             <input
               className="input"
-              placeholder="Фрагмент хэша транзакции"
+              placeholder="Фрагмент tx hash"
               value={txHashFilter}
               onChange={(e) => setTxHashFilter(e.target.value)}
             />
           </div>
-          <div style={{ minWidth: 160 }}>
+          <div style={{ flex: "0 1 180px", minWidth: 0 }}>
+            <div className="label">Статус</div>
             <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Все статусы</option>
-              <option value="REGISTERED">В реестре (вне сети)</option>
-              <option value="PENDING_APPROVAL">На рассмотрении</option>
+              <option value="UNDER_REVIEW">На рассмотрении</option>
+              <option value="APPROVED">Одобрен (до сети)</option>
               <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
               <option value="REJECTED">Отклонён</option>
               <option value="TRANSFERRED">Передан</option>
             </select>
           </div>
-          <div style={{ minWidth: 140 }}>
+          <div style={{ flex: "0 1 200px", minWidth: 0 }}>
+            <div className="label">Сортировка</div>
             <select
               className="input"
               value={`${sortBy}-${sortOrder}`}
@@ -185,22 +190,22 @@ export const GlobalRegistryPage: React.FC = () => {
 
       <div className="card">
         {loading ? (
-          <div className="text-center" style={{ padding: 24 }}>
+          <div className="text-center" style={{ padding: 28 }}>
             <Spinner size={32} />
           </div>
         ) : items.length === 0 ? (
-          <div className="empty-state">
+          <div className="empty-state empty-state--soft">
             <div className="empty-state-icon">📋</div>
-            <div className="empty-state-title">Нет документов в реестре</div>
+            <div className="empty-state-title">Нет записей</div>
             <div className="muted" style={{ marginTop: 4 }}>
-              Загрузите документ на странице «Загрузка», чтобы он появился здесь.
+              Загрузите документ — после отправки на рассмотрение он появится в реестре.
             </div>
             <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
               Загрузить документ
             </Link>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="ui-table-wrap table-scroll">
             <table className="w-full registry-table">
               <thead>
                 <tr>
@@ -228,9 +233,7 @@ export const GlobalRegistryPage: React.FC = () => {
                       </td>
                       <td>{buyerWallet ? <WalletCell address={buyerWallet} /> : <span className="muted">—</span>}</td>
                       <td>
-                        <span className={`soft-badge soft-badge--${action.kind}`}>
-                          {action.label}
-                        </span>
+                        <span className={`soft-badge soft-badge--${action.kind}`}>{action.label}</span>
                       </td>
                       <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                         {formatRuDateTimeSeconds(r.created_at)}

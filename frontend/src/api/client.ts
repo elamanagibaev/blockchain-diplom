@@ -10,6 +10,11 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // FormData must set multipart boundary automatically — never force Content-Type
+  if (config.data instanceof FormData) {
+    const h = config.headers as Record<string, unknown>;
+    delete h["Content-Type"];
+  }
   return config;
 });
 
