@@ -42,6 +42,7 @@ class DigitalObject(Base):
     department_approved_at = Column(DateTime(timezone=True), nullable=True)
     deanery_approved_at = Column(DateTime(timezone=True), nullable=True)
     ai_check_status = Column(String(20), nullable=False, default="skipped", server_default="skipped")
+    # Кошелёк выпускника: обязателен при загрузке диплома; в реестр и QR уходит после авто-этапов 4–5.
     student_wallet_address = Column(String(100), nullable=True)
 
     owner = relationship("User", backref="digital_objects")

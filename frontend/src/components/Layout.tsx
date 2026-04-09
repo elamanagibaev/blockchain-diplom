@@ -53,13 +53,15 @@ export const Layout: React.FC = () => {
           </Link>
 
           <nav className={`app-nav ${navOpen ? "app-nav--open" : ""}`} id="app-main-nav">
-            <Link
-              to="/upload"
-              className={`app-nav-link ${isActive("/upload") ? "app-nav-link--active" : ""}`}
-              onClick={() => setNavOpen(false)}
-            >
-              Загрузка
-            </Link>
+            {user?.role === "department" && (
+              <Link
+                to="/upload"
+                className={`app-nav-link ${isActive("/upload") ? "app-nav-link--active" : ""}`}
+                onClick={() => setNavOpen(false)}
+              >
+                Загрузка
+              </Link>
+            )}
             <Link
               to="/files"
               className={`app-nav-link ${isActive("/files") ? "app-nav-link--active" : ""}`}

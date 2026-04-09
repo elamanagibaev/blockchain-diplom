@@ -1,8 +1,13 @@
+import os
 from functools import lru_cache
 from typing import List, Optional
 
 from pydantic_settings import BaseSettings
 from pydantic import AnyUrl
+
+# Соответствие ТЗ: переменная окружения (как os.getenv("BLOCK_EXPLORER_URL")).
+# Рабочее значение после загрузки .env: get_settings().BLOCK_EXPLORER_URL
+BLOCK_EXPLORER_URL = os.getenv("BLOCK_EXPLORER_URL")
 
 
 class Settings(BaseSettings):
@@ -34,6 +39,10 @@ class Settings(BaseSettings):
     CONTRACT_OWNER_PRIVATE_KEY: Optional[str] = None
     CONTRACT_OWNER_ADDRESS: Optional[str] = None
     CHAIN_ID: int = 31337
+
+    # База URL обозревателя (Etherscan, Polygonscan и т.д.), без завершающего /. Для ссылок tx в API.
+    # Читается из окружения как os.getenv("BLOCK_EXPLORER_URL") / запись в .env (pydantic-settings).
+    BLOCK_EXPLORER_URL: Optional[str] = None
 
     # Публичный URL фронтенда для ссылок verify / QR (без завершающего слэша)
     PUBLIC_VERIFY_BASE_URL: str = "http://localhost:5173"

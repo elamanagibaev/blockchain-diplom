@@ -87,21 +87,25 @@ export const DashboardPage: React.FC = () => {
             Сводка по документам и блокчейну.
           </p>
         </div>
-        <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
-          Загрузить диплом
-        </Link>
+        {user?.role === "department" && (
+          <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+            Загрузить диплом
+          </Link>
+        )}
       </div>
 
       <Card style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Верификация дипломов на блокчейне</h2>
         <p className="muted" style={{ marginBottom: 16, maxWidth: 560 }}>
-          Загрузите документ, пройдите согласование — хэш будет зафиксирован в смарт-контракте. Проверка подлинности доступна
-          любому пользователю.
+          Кафедра загружает документ и подаёт на согласование; деканат подтверждает; администратор выполняет запись в сеть.
+          Проверка подлинности доступна любому пользователю.
         </p>
         <div className="dashboard-hero-actions">
-          <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
-            Загрузить документ
-          </Link>
+          {user?.role === "department" && (
+            <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+              Загрузить документ
+            </Link>
+          )}
           <Link to="/verify" className="ui-btn ui-btn--secondary ui-btn--md" style={{ textDecoration: "none" }}>
             Проверить документ
           </Link>
@@ -159,9 +163,11 @@ export const DashboardPage: React.FC = () => {
                 📄
               </div>
               <div style={{ fontWeight: 600 }}>Документов пока нет</div>
-              <Link to="/upload" style={{ display: "inline-block", marginTop: 12 }}>
-                Загрузить диплом
-              </Link>
+              {user?.role === "department" && (
+                <Link to="/upload" style={{ display: "inline-block", marginTop: 12 }}>
+                  Загрузить диплом
+                </Link>
+              )}
             </div>
           )}
         </Card>
@@ -171,7 +177,7 @@ export const DashboardPage: React.FC = () => {
           <ol style={{ paddingLeft: 18, color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
             <li style={{ marginBottom: 8 }}>Загрузка и фиксация хэша</li>
             <li style={{ marginBottom: 8 }}>Проверка ИИ (опционально)</li>
-            <li style={{ marginBottom: 8 }}>Экспертное согласование</li>
+            <li style={{ marginBottom: 8 }}>Согласование деканатом</li>
             <li style={{ marginBottom: 8 }}>Регистрация в реестре</li>
             <li>Закрепление за владельцем и QR</li>
           </ol>

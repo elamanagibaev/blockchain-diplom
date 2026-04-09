@@ -29,6 +29,7 @@ def get_document_stages(
 
 
 @router.post("/documents/{obj_id}/approve", response_model=ApprovalDecisionResponse)
+@router.patch("/documents/{obj_id}/approve", response_model=ApprovalDecisionResponse)
 def approve_current_stage(
     obj_id: UUID,
     body: ApprovalActionRequest,

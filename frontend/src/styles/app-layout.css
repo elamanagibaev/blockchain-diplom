@@ -740,6 +740,14 @@
   line-height: 1.5;
 }
 
+.stage-step--automation {
+  margin-left: -4px;
+  padding-left: 8px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
 /* Document status badge (DocumentStatusBadge.tsx) */
 .doc-status-badge {
   display: inline-block;

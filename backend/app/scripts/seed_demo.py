@@ -17,6 +17,7 @@ from uuid import UUID
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from fastapi import HTTPException
+from web3 import Web3
 
 from app.constants.document_events import DocumentEventAction
 from app.core.config import get_settings
@@ -32,11 +33,11 @@ from app.utils.wallet import generate_evm_wallet, encrypt_private_key
 
 settings = get_settings()
 
-# Основной набор для демонстрации (роли согласованы с approval-workflow)
+# Демо: кафедра загружает документы; деканат подтверждает; admin — только on-chain.
 DEMO_USERS = [
-    ("demo.owner@blockproof.local", "Demo2026!", "user"),  # загрузчик / владелец документа
-    ("demo.dept@blockproof.local", "Demo2026!", "department"),  # согласующий 1 — кафедра
-    ("demo.dean@blockproof.local", "Demo2026!", "dean"),  # согласующий 2 — деканат
+    ("demo.owner@blockproof.local", "Demo2026!", "user"),  # опциональный владелец / просмотр
+    ("demo.dept@blockproof.local", "Demo2026!", "department"),  # кафедра — загрузка и подача
+    ("demo.dean@blockproof.local", "Demo2026!", "dean"),  # деканат — единственное согласование
     ("admin@example.com", "admin", "admin"),
 ]
 
@@ -57,9 +58,11 @@ LEGACY_PATENTEE_FILES = [
 
 # Имена файлов — латиница, стабильные для чеклиста
 DOC_FROZEN = "DEMO_01_FROZEN.pdf"
-DOC_STAGE1 = "DEMO_02_ETAP1_kafedra.pdf"
-DOC_STAGE2 = "DEMO_03_ETAP2_dekan.pdf"
-DOC_APPROVED = "DEMO_04_APPROVED.pdf"
+DOC_UNDER_REVIEW = "DEMO_02_UNDER_REVIEW_dean.pdf"
+DOC_APPROVED = "DEMO_03_APPROVED.pdf"
+
+# Фиксированный кошелёк «выпускника» для демо (обязательное поле при загрузке).
+DEMO_STUDENT_WALLET = Web3.to_checksum_address("0x1111111111111111111111111111111111111111")
 
 
 def _pdf_bytes(seed: int, label: str) -> bytes:
@@ -93,10 +96,6 @@ def create_users(db) -> None:
         _ensure_user(db, email, password, role)
 
 
-def _get_owner(db) -> User | None:
-    return db.query(User).filter(User.email == "demo.owner@blockproof.local").first()
-
-
 def _get_dept(db) -> User | None:
     return db.query(User).filter(User.email == "demo.dept@blockproof.local").first()
 
@@ -111,6 +110,7 @@ def create_frozen_document(
     filename: str,
     description: str,
     content_seed: int,
+    student_wallet: str | None = None,
 ) -> DigitalObject | None:
     existing = (
         db.query(DigitalObject)
@@ -143,6 +143,7 @@ def create_frozen_document(
         document_type="document",
         visibility="public",
         owner_wallet_address=owner.wallet_address,
+        student_wallet_address=student_wallet or DEMO_STUDENT_WALLET,
         status="FROZEN",
         ai_check_status="skipped",
     )
@@ -241,61 +242,44 @@ def create_legacy_patentee_frozen_docs(db) -> int:
     return count
 
 
-def seed_scenario_documents(db, owner: User, dept: User, dean: User) -> None:
-    """Создаёт четыре документа с разным состоянием workflow (идемпотентно по имени файла)."""
+def seed_scenario_documents(db, dept: User, dean: User) -> None:
+    """Три документа: черновик, на согласовании у деканата, APPROVED (владелец записей — кафедра)."""
 
-    # 1) Только FROZEN — для живой подачи на согласование
+    # 1) FROZEN — подача на согласование вручную
     o1 = create_frozen_document(
         db,
-        owner,
+        dept,
         DOC_FROZEN,
-        "Демо: документ для подачи на согласование (начните сценарий здесь)",
+        "Демо: черновик — подайте на согласование (роль department)",
         1,
     )
     if o1 is None:
         pass
 
-    # 2) UNDER_REVIEW, текущий этап — кафедра
+    # 2) UNDER_REVIEW — единственный этап DEAN_REVIEW
     o2 = create_frozen_document(
         db,
-        owner,
-        DOC_STAGE1,
-        "Демо: ожидает согласования на кафедре (этап 1)",
+        dept,
+        DOC_UNDER_REVIEW,
+        "Демо: ожидает подтверждения деканатом",
         2,
     )
     if o2:
-        _submit(db, owner, o2.id)
+        _submit(db, dept, o2.id)
 
-    # 3) UNDER_REVIEW, текущий этап — деканат (после кафедры)
+    # 3) APPROVED — очередь финальной on-chain регистрации (admin)
     o3 = create_frozen_document(
         db,
-        owner,
-        DOC_STAGE2,
-        "Демо: ожидает согласования в деканате (этап 2)",
+        dept,
+        DOC_APPROVED,
+        "Демо: согласован деканатом, очередь on-chain",
         3,
     )
     if o3:
-        _submit(db, owner, o3.id)
+        _submit(db, dept, o3.id)
         d3 = db.query(DigitalObject).filter(DigitalObject.id == o3.id).first()
         if d3 and d3.status == "UNDER_REVIEW":
-            _approve(db, d3, dept, "кафедра")
-
-    # 4) APPROVED — очередь финальной on-chain регистрации
-    o4 = create_frozen_document(
-        db,
-        owner,
-        DOC_APPROVED,
-        "Демо: полное внутреннее согласование, очередь on-chain",
-        4,
-    )
-    if o4:
-        _submit(db, owner, o4.id)
-        d4 = db.query(DigitalObject).filter(DigitalObject.id == o4.id).first()
-        if d4 and d4.status == "UNDER_REVIEW":
-            _approve(db, d4, dept, "кафедра")
-            d4 = db.query(DigitalObject).filter(DigitalObject.id == o4.id).first()
-        if d4 and d4.status == "UNDER_REVIEW":
-            _approve(db, d4, dean, "деканат")
+            _approve(db, d3, dean, "деканат")
 
 
 def run() -> None:
@@ -306,31 +290,30 @@ def run() -> None:
         create_users(db)
         db.commit()
 
-        owner = _get_owner(db)
         dept = _get_dept(db)
         dean = _get_dean(db)
-        if not owner or not dept or not dean:
-            print("Не найдены demo.owner / demo.dept / demo.dean — проверьте DEMO_USERS")
+        if not dept or not dean:
+            print("Не найдены demo.dept / demo.dean — проверьте DEMO_USERS")
             return
 
         print("Документы (сценарии):")
-        seed_scenario_documents(db, owner, dept, dean)
+        seed_scenario_documents(db, dept, dean)
 
         print("Документы (legacy patentee@ip.ru):")
         n_legacy = create_legacy_patentee_frozen_docs(db)
         print(f"  Создано новых: {n_legacy}")
 
         print("\n=== Учётные записи для демо ===")
-        print("  Владелец / загрузчик:  demo.owner@blockproof.local / Demo2026!")
-        print("  Согласующий 1 (кафедра): demo.dept@blockproof.local / Demo2026!")
-        print("  Согласующий 2 (деканат): demo.dean@blockproof.local / Demo2026!")
-        print("  Администратор:          admin@example.com / admin")
+        print("  Кафедра (загрузка, подача): demo.dept@blockproof.local / Demo2026!")
+        print("  Деканат (согласование):     demo.dean@blockproof.local / Demo2026!")
+        print("  Администратор (on-chain):   admin@example.com / admin")
+        print("  (опц.) demo.owner@blockproof.local — просмотр как user")
         print("  (legacy) patentee@ip.ru / patentee123 — дополнительные FROZEN-файлы")
-        print("\n=== Файлы у demo.owner (основной сценарий) ===")
-        for fn in (DOC_FROZEN, DOC_STAGE1, DOC_STAGE2, DOC_APPROVED):
+        print("\n=== Файлы у demo.dept (основной сценарий) ===")
+        for fn in (DOC_FROZEN, DOC_UNDER_REVIEW, DOC_APPROVED):
             doc = (
                 db.query(DigitalObject)
-                .filter(DigitalObject.owner_id == owner.id, DigitalObject.file_name == fn)
+                .filter(DigitalObject.owner_id == dept.id, DigitalObject.file_name == fn)
                 .first()
             )
             if doc:

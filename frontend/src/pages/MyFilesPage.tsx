@@ -4,10 +4,12 @@ import { api } from "../api/client";
 import { FileTable, FileRow } from "../components/FileTable";
 import { Spinner } from "../components/ui/Spinner";
 import { useNotification } from "../context/NotificationContext";
+import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/Card";
 
 export const MyFilesPage: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const { notify } = useNotification();
   const [filtered, setFiltered] = useState<FileRow[]>([]);
   const [search, setSearch] = useState("");
@@ -64,9 +66,11 @@ export const MyFilesPage: React.FC = () => {
             Список загрузок, фильтр по статусу, переход к карточке.
           </p>
         </div>
-        <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
-          Загрузить диплом
-        </Link>
+        {user?.role === "department" && (
+          <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ textDecoration: "none" }}>
+            Загрузить диплом
+          </Link>
+        )}
       </div>
 
       <Card>
@@ -110,13 +114,19 @@ export const MyFilesPage: React.FC = () => {
             <p className="muted" style={{ marginTop: 8 }}>
               Загрузите документ — он появится здесь.
             </p>
-            <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ marginTop: 16, textDecoration: "none" }}>
-              Загрузить диплом
-            </Link>
+            {user?.role === "department" && (
+              <Link to="/upload" className="ui-btn ui-btn--primary ui-btn--md" style={{ marginTop: 16, textDecoration: "none" }}>
+                Загрузить диплом
+              </Link>
+            )}
           </div>
         ) : (
           <div className="data-table-wrap">
-            <FileTable items={filtered} onSubmitForRegistration={onSubmitForRegistration} loadingId={loadingRegister} />
+            <FileTable
+              items={filtered}
+              onSubmitForRegistration={user?.role === "department" ? onSubmitForRegistration : undefined}
+              loadingId={loadingRegister}
+            />
           </div>
         )}
       </Card>

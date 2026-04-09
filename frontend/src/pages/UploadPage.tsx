@@ -2,11 +2,13 @@ import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload } from "lucide-react";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 export const UploadPage: React.FC = () => {
+  const { user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
@@ -15,9 +17,15 @@ export const UploadPage: React.FC = () => {
   const [year, setYear] = useState("");
   const [major, setMajor] = useState("");
   const [diplomaNumber, setDiplomaNumber] = useState("");
+  const [studentWallet, setStudentWallet] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [drag, setDrag] = useState(false);
+
+  const isValidWallet = (w: string): boolean => {
+    const s = w.trim();
+    return /^0x[a-fA-F0-9]{40}$/.test(s);
+  };
 
   const buildDescription = (): string => {
     const t = title.trim();
@@ -42,11 +50,17 @@ export const UploadPage: React.FC = () => {
       setError("Введите название документа");
       return;
     }
+    const sw = studentWallet.trim();
+    if (!isValidWallet(sw)) {
+      setError("Укажите корректный student_wallet: 0x и 40 hex-символов");
+      return;
+    }
     setLoading(true);
     try {
       const form = new FormData();
       form.append("upload_file", file);
       form.append("description", buildDescription());
+      form.append("student_wallet", sw);
       const res = await api.post<{ id: string }>("/files/upload", form);
       notify("success", "Документ загружен, хэш зафиксирован.");
       navigate(`/files/${res.data.id}`);
@@ -74,12 +88,26 @@ export const UploadPage: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
   };
 
+  if (user && user.role !== "department") {
+    return (
+      <div>
+        <h1 className="page-title">Загрузка диплома</h1>
+        <Card padding="lg">
+          <p className="bad" style={{ margin: 0 }}>
+            Загрузка документов доступна только учётной записи с ролью <code>department</code> (кафедра). Войдите под
+            соответствующей учётной записью.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="page-title">Загрузка диплома</h1>
       <p className="page-subtitle">
         PDF, DOC, DOCX, изображение или текст. Укажите название — оно попадёт в реестр. Дополнительные поля объединяются в
-        описание (один запрос к API, как раньше).
+        описание (один запрос к API, как раньше). Доступно только роли кафедры.
       </p>
 
       <div className="row" style={{ alignItems: "stretch", gap: 24, flexWrap: "wrap" }}>
@@ -126,6 +154,17 @@ export const UploadPage: React.FC = () => {
               </div>
             )}
 
+            <Input
+              label="Student wallet выпускника (обязательно)"
+              name="student_wallet"
+              value={studentWallet}
+              onChange={(e) => setStudentWallet(e.target.value)}
+              placeholder="0x…"
+              required
+            />
+            <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+              Ethereum-адрес для записи в реестр и QR после согласования деканата (автоматически).
+            </p>
             <Input label="Название документа (обязательно)" name="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Диплом бакалавра" required />
             <Input label="ФИО выпускника" name="graduate" value={graduateName} onChange={(e) => setGraduateName(e.target.value)} placeholder="Необязательно" />
             <div className="row" style={{ gap: 16 }}>
@@ -150,7 +189,7 @@ export const UploadPage: React.FC = () => {
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Как это работает</h2>
           <ol style={{ paddingLeft: 18, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.55 }}>
             <li style={{ marginBottom: 10 }}>Файл сохраняется в хранилище, в БД — хэш SHA-256 и метаданные.</li>
-            <li style={{ marginBottom: 10 }}>Для записи в блокчейн подайте заявку из карточки документа.</li>
+            <li style={{ marginBottom: 10 }}>После согласования деканата регистрация в сети и привязка к кошельку выполняются автоматически.</li>
             <li>Проверка подлинности — по хэшу содержимого на странице верификации.</li>
           </ol>
         </Card>

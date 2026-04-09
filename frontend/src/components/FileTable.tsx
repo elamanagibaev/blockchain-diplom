@@ -18,12 +18,12 @@ import { BlockchainOnChainIcon } from "./BlockchainOnChainIcon";
 
 /** Legacy: UPLOADED / REGISTERED без tx → показываем как FROZEN («черновик»). */
 export function patentDisplayStatus(status: string, hasTx: boolean): string {
-  if (!hasTx && (status === "REGISTERED" || status === "UPLOADED")) return "FROZEN";
+  if (!hasTx && status === "UPLOADED") return "FROZEN";
   return status;
 }
 
 export function canSubmitForRegistration(status: string, hasTx: boolean): boolean {
-  return !hasTx && ["FROZEN", "UPLOADED", "REGISTERED", "REJECTED"].includes(status);
+  return !hasTx && ["FROZEN", "UPLOADED", "REJECTED"].includes(status);
 }
 
 function documentDisplayName(f: FileRow): string {

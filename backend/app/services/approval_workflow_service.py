@@ -1,34 +1,38 @@
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.constants.document_events import DocumentEventAction
-from app.constants.lifecycle import LifecycleStatus
+from app.constants.lifecycle import LifecycleStatus, is_ledger_registered_status
 from app.models.approval_action import ApprovalAction
 from app.models.approval_stage_definition import ApprovalStageDefinition
 from app.models.digital_object import DigitalObject
 from app.models.user import User
+from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.document_event_service import DocumentEventService
 from app.services.pipeline_service import PipelineService
 
 ACTION_APPROVE = "APPROVE"
 ACTION_REJECT = "REJECT"
 
+logger = logging.getLogger(__name__)
+
+# Упрощённая модель (дипломы): один этап — подтверждение деканатом.
+# Администратор НЕ участвует в согласовании (см. _check_actor_can_act, can_act).
+# Регистратор исключён из workflow.
+STAGE_DEAN_REVIEW = "DEAN_REVIEW"
+
 DEFAULT_APPROVAL_STAGES = [
     {
-        "code": "DEPARTMENT_REVIEW",
-        "title": "Кафедра",
+        "code": STAGE_DEAN_REVIEW,
+        "title": "Деканат",
         "stage_order": 1,
-        "allowed_roles": ["department", "admin"],
-    },
-    {
-        "code": "DEAN_REGISTRAR_REVIEW",
-        "title": "Деканат / Регистратор",
-        "stage_order": 2,
-        "allowed_roles": ["dean", "registrar", "admin"],
+        "allowed_roles": ["dean"],
     },
 ]
 
@@ -82,13 +86,12 @@ class ApprovalWorkflowService:
         return None
 
     def _check_actor_can_act(self, actor: User, stage: ApprovalStageDefinition) -> None:
+        """Только роли из allowed_roles; admin не может подтверждать этапы согласования."""
         allowed_roles = list(stage.allowed_roles or [])
-        if actor.role == "admin":
-            return
         if actor.role not in allowed_roles:
             raise HTTPException(
                 status_code=403,
-                detail=f"Role '{actor.role}' cannot approve stage '{stage.code}'",
+                detail=f"Роль '{actor.role}' не может выполнять этап согласования '{stage.code}'",
             )
 
     def get_document_stages(self, document: DigitalObject, actor: User | None = None) -> dict:
@@ -96,7 +99,13 @@ class ApprovalWorkflowService:
         stages = self._get_stage_definitions()
         latest = self._latest_actions_by_stage(document.id)
         current = self._current_stage(document.id)
-        if document.status == LifecycleStatus.APPROVED.value:
+        if document.status in (
+            LifecycleStatus.DEAN_APPROVED.value,
+            LifecycleStatus.APPROVED.value,
+            LifecycleStatus.ASSIGNED_TO_OWNER.value,
+            LifecycleStatus.REGISTERED.value,
+            LifecycleStatus.REGISTERED_ON_CHAIN.value,
+        ) or is_ledger_registered_status(document.status):
             current = None
 
         output = []
@@ -106,7 +115,13 @@ class ApprovalWorkflowService:
             acted_by = None
             acted_at = None
             comment = None
-            if document.status == LifecycleStatus.APPROVED.value:
+            if document.status in (
+                LifecycleStatus.DEAN_APPROVED.value,
+                LifecycleStatus.APPROVED.value,
+                LifecycleStatus.ASSIGNED_TO_OWNER.value,
+                LifecycleStatus.REGISTERED.value,
+                LifecycleStatus.REGISTERED_ON_CHAIN.value,
+            ):
                 state = "APPROVED"
                 if stage_action:
                     if stage_action.action == ACTION_REJECT:
@@ -124,18 +139,24 @@ class ApprovalWorkflowService:
                 comment = stage_action.comment
             if current and stage.id == current.id and state == "PENDING":
                 state = "CURRENT"
+            allowed = stage.allowed_roles or []
+            can_act = bool(
+                actor
+                and state == "CURRENT"
+                and actor.role in allowed
+            )
             output.append(
                 {
                     "stage_id": stage.id,
                     "stage_code": stage.code,
                     "title": stage.title,
                     "stage_order": stage.stage_order,
-                    "allowed_roles": stage.allowed_roles or [],
+                    "allowed_roles": allowed,
                     "state": state,
                     "acted_by": acted_by,
                     "acted_at": acted_at,
                     "comment": comment,
-                    "can_act": bool(actor and state == "CURRENT" and (actor.role == "admin" or actor.role in (stage.allowed_roles or []))),
+                    "can_act": can_act,
                 }
             )
 
@@ -144,7 +165,9 @@ class ApprovalWorkflowService:
             "document_status": document.status,
             "current_stage_code": current.code if current else None,
             "all_stages_completed": current is None,
-            "ready_for_final_registration": document.status == LifecycleStatus.APPROVED.value,
+            "ready_for_final_registration": document.status
+            in (LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value)
+            and not getattr(document, "blockchain_tx_hash", None),
             "stages": output,
         }
 
@@ -176,33 +199,45 @@ class ApprovalWorkflowService:
             document_id=document.id,
             user_id=actor.id,
             action=DocumentEventAction.APPROVAL.value,
-            metadata={"decision": "approved", "stage_code": stage.code, "comment": (comment or "").strip() or None},
+            metadata={
+                "decision": "approved",
+                "step": "dean_approved",
+                "automatic": False,
+                "workflow": "single_stage_dean",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "stage_code": stage.code,
+                "comment": (comment or "").strip() or None,
+            },
         )
         self.db.flush()
 
         pipeline = PipelineService(self.db)
-        if stage.code == "DEPARTMENT_REVIEW":
-            pipeline.on_department_approved(document, actor)
-        elif stage.code == "DEAN_REGISTRAR_REVIEW":
+        # Один этап — фиксация согласования деканата (метка времени deanery_approved_at).
+        if stage.code == STAGE_DEAN_REVIEW:
             pipeline.on_deanery_approved(document, actor)
 
         next_stage = self._current_stage(document.id)
         if next_stage is None:
-            document.status = LifecycleStatus.APPROVED.value
+            # Диплом не возвращается на кафедру: фиксируем согласование деканата и сразу автоматика 4→5.
+            document.status = LifecycleStatus.DEAN_APPROVED.value
             self.db.add(document)
-            DocumentEventService(self.db).record(
-                document_id=document.id,
-                user_id=actor.id,
-                action=DocumentEventAction.APPROVAL_COMPLETED.value,
-                metadata={
-                    "step": "internal_approval_completed",
-                    "workflow": "multi_stage",
-                    "meaning": "ready_for_final_on_chain_registration",
-                },
-            )
             self.db.commit()
             self.db.refresh(document)
-            return {"status": document.status, "completed": True}
+
+            auto_ok = False
+            try:
+                auto_ok = DiplomaAutomationService(self.db).finalize_after_dean_if_ready(document, actor)
+                self.db.refresh(document)
+            except Exception:
+                logger.exception("Post-dean automation failed for document %s", document.id)
+                self.db.rollback()
+                document = (
+                    self.db.query(DigitalObject)
+                    .filter(DigitalObject.id == document.id)
+                    .first()
+                )
+
+            return {"status": document.status, "completed": True, "automation_completed": auto_ok}
 
         self.db.commit()
         self.db.refresh(document)
@@ -265,6 +300,7 @@ class ApprovalWorkflowService:
         return result
 
     def list_pending_documents_visible_for_actor(self, actor: User) -> list[DigitalObject]:
+        """Документы на текущем этапе, видимые согласующему (без admin — не согласующий)."""
         self.ensure_stage_definitions()
         docs = (
             self.db.query(DigitalObject)
@@ -278,6 +314,6 @@ class ApprovalWorkflowService:
             stage = self._current_stage(doc.id)
             if not stage:
                 continue
-            if actor.role == "admin" or actor.role in (stage.allowed_roles or []):
+            if actor.role in (stage.allowed_roles or []):
                 result.append(doc)
         return result

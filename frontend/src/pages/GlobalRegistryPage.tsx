@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/ui/Spinner";
 
@@ -76,6 +77,7 @@ function WalletCell({ address }: { address: string | null | undefined }) {
 }
 
 export const GlobalRegistryPage: React.FC = () => {
+  const { user } = useAuth();
   const [items, setItems] = useState<DocRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -200,9 +202,11 @@ export const GlobalRegistryPage: React.FC = () => {
             <div className="muted" style={{ marginTop: 4 }}>
               Загрузите документ — после отправки на рассмотрение он появится в реестре.
             </div>
-            <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
-              Загрузить документ
-            </Link>
+            {user?.role === "department" && (
+              <Link to="/upload" className="btn btn-primary" style={{ marginTop: 16 }}>
+                Загрузить документ
+              </Link>
+            )}
           </div>
         ) : (
           <div className="ui-table-wrap table-scroll">

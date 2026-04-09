@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db, get_optional_user
+from app.constants.lifecycle import is_ledger_registered_status
 from app.core.config import get_settings
 from app.models.blockchain_event import BlockchainEvent
 from app.models.digital_object import DigitalObject
@@ -156,7 +157,7 @@ def verify_document_public(
     base = settings.PUBLIC_VERIFY_BASE_URL.rstrip("/")
     verify_url = f"{base}/verify/doc/{document_id}"
     wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
-    authentic = obj.status == "REGISTERED_ON_CHAIN" and bool(obj.blockchain_tx_hash)
+    authentic = is_ledger_registered_status(obj.status) and bool(obj.blockchain_tx_hash)
 
     return PublicVerifyDocumentResponse(
         document_id=obj.id,

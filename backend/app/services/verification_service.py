@@ -8,7 +8,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from app.constants.document_events import DocumentEventAction
-from app.constants.lifecycle import LifecycleStatus
+from app.constants.lifecycle import LifecycleStatus, is_ledger_registered_status
 from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.models.verification_log import VerificationLog
@@ -19,10 +19,7 @@ VerifyStatus = Literal["VALID", "INVALID", "NOT_FOUND"]
 
 
 def _on_chain_authentic(obj: DigitalObject) -> bool:
-    return (
-        obj.status == LifecycleStatus.REGISTERED_ON_CHAIN.value
-        and bool(obj.blockchain_tx_hash)
-    )
+    return is_ledger_registered_status(obj.status) and bool(obj.blockchain_tx_hash)
 
 
 class VerificationService:

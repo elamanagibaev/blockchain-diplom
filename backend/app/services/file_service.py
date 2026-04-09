@@ -63,6 +63,23 @@ def _normalize_mime_for_upload(mime: str, filename: str) -> str:
     return mime
 
 
+def normalize_student_wallet(addr: str) -> str:
+    """EVM-адрес для выпускника (on-chain owner); обязателен при загрузке диплома."""
+    raw = (addr or "").strip()
+    if len(raw) != 42 or not raw.startswith("0x"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Укажите корректный student_wallet (0x и 40 hex-символов)",
+        )
+    try:
+        return Web3.to_checksum_address(raw)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Некорректный формат student_wallet",
+        )
+
+
 def _safe_filename(name: str) -> str:
     # Avoid path traversal and weird characters; keep it readable.
     name = name.replace("\\", "_").replace("/", "_")
@@ -98,13 +115,20 @@ class FileService:
                 detail=f"File type not allowed: {mime}",
             )
 
-    def register_file(self, user: User, file: UploadFile, description: str) -> DigitalObject:
+    def register_file(self, user: User, file: UploadFile, description: str, student_wallet: str) -> DigitalObject:
+        # Дублируем проверку маршрута: загрузку выполняет только кафедра (упрощённый workflow).
+        if user.role != "department":
+            raise HTTPException(
+                status_code=403,
+                detail="Загрузка документа доступна только роли department (кафедра).",
+            )
         desc = (description or "").strip()
         if not desc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Введите название документа",
             )
+        sw = normalize_student_wallet(student_wallet)
 
         raw = file.file.read()
         if len(raw) > MAX_FILE_SIZE_BYTES:
@@ -126,7 +150,7 @@ class FileService:
             )
 
         # Всегда сохраняем в локальное хранилище при загрузке. В MinIO попадут только
-        # файлы, прошедшие регистрацию в блокчейне (при approve админом).
+        # файлы после финальной on-chain регистрации (администратор).
         local_storage = LocalStorageBackend()
         storage_key = local_storage.save(BytesIO(raw), filename)
 
@@ -146,6 +170,7 @@ class FileService:
             document_type=doc_type,
             owner_wallet_address=user.wallet_address,
             visibility="public",
+            student_wallet_address=sw,
             status=LifecycleStatus.FROZEN.value,
         )
         self.db.add(obj)
@@ -232,14 +257,23 @@ class FileService:
         return query.all()
 
     def submit_for_registration(self, user: User, obj_id: UUID) -> DigitalObject:
-        """User submits document for admin approval to register on blockchain."""
+        """Подача на согласование деканату (упрощённая модель: загрузку выполняет кафедра)."""
+        if user.role != "department":
+            raise HTTPException(
+                status_code=403,
+                detail="Подачу на согласование может инициировать только роль department (кафедра).",
+            )
         obj = self.get_object(user, obj_id, require_owner=True)
         if obj.blockchain_tx_hash:
             raise HTTPException(status_code=400, detail="Документ уже зарегистрирован в блокчейне")
+        if not (getattr(obj, "student_wallet_address", None) or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Укажите кошелёк выпускника (student_wallet) при загрузке диплома перед подачей на согласование",
+            )
         allowed = (
             LifecycleStatus.FROZEN.value,
             LifecycleStatus.UPLOADED.value,
-            "REGISTERED",  # legacy
             LifecycleStatus.REJECTED.value,
         )
         if obj.status not in allowed:
@@ -255,7 +289,7 @@ class FileService:
             document_id=obj.id,
             user_id=user.id,
             action=DocumentEventAction.APPROVAL.value,
-            metadata={"step": "submit_for_review", "workflow": "multi_stage"},
+            metadata={"step": "submit_for_review", "workflow": "single_stage_dean"},
         )
         PipelineService(self.db).on_submit_for_review(obj, user.id)
         self.db.commit()
@@ -263,11 +297,15 @@ class FileService:
         return obj
 
     def list_pending_registrations(self) -> list[DigitalObject]:
-        """List documents that fully passed internal review and await on-chain registration."""
+        """Документы после деканата без on-chain (автоматика не сработала)."""
         return (
             self.db.query(DigitalObject)
             .options(joinedload(DigitalObject.owner))
-            .filter(DigitalObject.status == LifecycleStatus.APPROVED.value)
+            .filter(
+                DigitalObject.status.in_(
+                    [LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value]
+                )
+            )
             .order_by(DigitalObject.created_at.desc())
             .all()
         )
@@ -434,12 +472,19 @@ class FileService:
         obj = self.get_object(actor, obj_id)
         if actor.role != "admin" and obj.owner_id != actor.id:
             raise HTTPException(status_code=403, detail="Только владелец или администратор")
-        if obj.status != LifecycleStatus.REGISTERED_ON_CHAIN.value:
+        if obj.status == LifecycleStatus.ASSIGNED_TO_OWNER.value:
+            raise HTTPException(status_code=400, detail="Документ уже закреплён за выпускником")
+        if obj.status not in (
+            LifecycleStatus.REGISTERED_ON_CHAIN.value,
+            LifecycleStatus.REGISTERED.value,
+        ):
             raise HTTPException(
                 status_code=400,
-                detail="Привязка доступна после регистрации в реестре (REGISTERED_ON_CHAIN)",
+                detail="Привязка доступна после регистрации в реестре",
             )
         PipelineService(self.db).on_assign_student(obj, raw, actor.id)
+        obj.status = LifecycleStatus.ASSIGNED_TO_OWNER.value
+        self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)
         return obj

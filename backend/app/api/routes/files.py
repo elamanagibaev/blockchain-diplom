@@ -19,10 +19,11 @@ from app.schemas.files import (
     DocumentEventRead,
     Metrics,
 )
-from app.services.approval_workflow_service import ApprovalWorkflowService
 from app.services.blockchain_service import BlockchainService
+from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.file_service import FileService
 from app.services.pipeline_service import PipelineService
+from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -31,24 +32,26 @@ class StudentWalletBody(BaseModel):
     student_wallet_address: str
 
 
-def _require_roles(user: User, allowed: tuple[str, ...]) -> None:
-    if user.role == "admin":
-        return
-    if user.role not in allowed:
-        raise HTTPException(status_code=403, detail="Недостаточно прав для этой операции")
-
-
 @router.post("/upload", response_model=DigitalObjectCreateResponse)
 async def upload_file(
     description: str | None = Form(default=None),
+    student_wallet: str | None = Form(default=None),
     upload_file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Упрощённая модель: загрузку диплома выполняет только кафедра (роль department).
+    if current_user.role != "department":
+        raise HTTPException(
+            status_code=403,
+            detail="Загрузка документа доступна только роли department (кафедра).",
+        )
     desc = (description or "").strip()
     if not desc:
         raise HTTPException(status_code=422, detail="Введите название документа")
-    obj = FileService(db).register_file(current_user, upload_file, desc)
+    if not (student_wallet or "").strip():
+        raise HTTPException(status_code=422, detail="Укажите student_wallet (кошелёк выпускника)")
+    obj = FileService(db).register_file(current_user, upload_file, desc, student_wallet=student_wallet)
     return DigitalObjectCreateResponse(
         id=obj.id,
         file_name=obj.file_name,
@@ -60,6 +63,47 @@ async def upload_file(
         created_at=obj.created_at,
         blockchain_object_id=obj.blockchain_object_id,
         blockchain_tx_hash=obj.blockchain_tx_hash,
+        student_wallet_address=getattr(obj, "student_wallet_address", None),
+        tx_explorer_url=make_tx_explorer_url(getattr(obj, "blockchain_tx_hash", None)),
+    )
+
+
+class FileStatusSyncResponse(BaseModel):
+    id: UUID
+    status: str
+    blockchain_tx_hash: str | None = None
+    student_wallet_address: str | None = None
+    automation_attempted: bool = False
+    tx_explorer_url: str | None = None
+
+
+@router.patch("/{obj_id}/status", response_model=FileStatusSyncResponse)
+def patch_file_status(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Polling/retry: при зависшем DEAN_APPROVED повторяет автоматизацию этапов 4–5."""
+    fs = FileService(db)
+    obj = fs.get_object(current_user, obj_id, require_owner=True)
+    if current_user.role not in ("department", "admin"):
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    attempted = False
+    auto = DiplomaAutomationService(db)
+    if obj.status in (LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value) and not obj.blockchain_tx_hash:
+        attempted = True
+        auto.finalize_after_dean_if_ready(obj, current_user)
+        db.refresh(obj)
+    elif obj.status == LifecycleStatus.REGISTERED.value and obj.blockchain_tx_hash:
+        attempted = auto.complete_owner_assign_if_pending(obj, current_user)
+        db.refresh(obj)
+    return FileStatusSyncResponse(
+        id=obj.id,
+        status=obj.status,
+        blockchain_tx_hash=obj.blockchain_tx_hash,
+        student_wallet_address=getattr(obj, "student_wallet_address", None),
+        automation_attempted=attempted,
+        tx_explorer_url=make_tx_explorer_url(getattr(obj, "blockchain_tx_hash", None)),
     )
 
 
@@ -125,6 +169,7 @@ def _to_read(
         deanery_approved_at=getattr(o, "deanery_approved_at", None),
         ai_check_status=getattr(o, "ai_check_status", None) or "skipped",
         student_wallet_address=getattr(o, "student_wallet_address", None),
+        tx_explorer_url=make_tx_explorer_url(getattr(o, "blockchain_tx_hash", None)),
     )
 
 
@@ -183,37 +228,9 @@ def submit_for_registration(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Подача заявки на регистрацию в блокчейне (одобрение администратором)."""
+    """Подача на единственный этап согласования — проверка деканатом (далее APPROVED → on-chain у admin)."""
     obj = FileService(db).submit_for_registration(current_user, obj_id)
     return {"message": "Заявка на регистрацию отправлена", "status": obj.status}
-
-
-@router.post("/{obj_id}/approve/department")
-def approve_department_pipeline(
-    obj_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Этап 3 — подтверждение кафедры (роль department или admin)."""
-    _require_roles(current_user, ("department",))
-    obj = FileService(db).get_object(current_user, obj_id)
-    ApprovalWorkflowService(db).approve_current_stage(obj, current_user)
-    db.refresh(obj)
-    return {"message": "Этап кафедры подтверждён", "status": obj.status}
-
-
-@router.post("/{obj_id}/approve/deanery")
-def approve_deanery_pipeline(
-    obj_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Этап 3 — подтверждение деканата (роли dean / registrar или admin)."""
-    _require_roles(current_user, ("dean", "registrar"))
-    obj = FileService(db).get_object(current_user, obj_id)
-    ApprovalWorkflowService(db).approve_current_stage(obj, current_user)
-    db.refresh(obj)
-    return {"message": "Этап деканата подтверждён", "status": obj.status}
 
 
 @router.post("/{obj_id}/register")
@@ -222,7 +239,7 @@ def register_document_on_chain(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Этап 4 — финальная регистрация в смарт-контракте (только admin)."""
+    """Резерв: ручная финализация, если автоматика после декана не сработала (есть student_wallet)."""
     obj = (
         db.query(DigitalObject)
         .options(joinedload(DigitalObject.owner))
@@ -231,22 +248,37 @@ def register_document_on_chain(
     )
     if not obj:
         raise HTTPException(status_code=404, detail="Object not found")
-    if obj.status != LifecycleStatus.APPROVED.value:
+    if obj.status not in (LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value):
         raise HTTPException(
             status_code=400,
-            detail=f"Документ должен быть APPROVED после согласований, текущий статус: {obj.status}",
+            detail=f"Документ должен быть DEAN_APPROVED после согласования деканата, текущий статус: {obj.status}",
         )
     owner = obj.owner
     if not owner:
         raise HTTPException(status_code=400, detail="Document has no owner")
-    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin)
+    sw = (getattr(obj, "student_wallet_address", None) or "").strip()
+    if sw:
+        DiplomaAutomationService(db).finalize_after_dean_if_ready(obj, current_admin)
+        db.refresh(obj)
+        return {
+            "tx_hash": obj.blockchain_tx_hash,
+            "object_id": obj.blockchain_object_id,
+            "status": obj.status,
+            "tx_explorer_url": make_tx_explorer_url(obj.blockchain_tx_hash),
+        }
+    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin, commit=False)
     try:
         FileService(db).migrate_file_to_minio(obj)
         db.commit()
     except Exception:
         db.rollback()
         raise
-    return {"tx_hash": tx_hash, "object_id": obj.blockchain_object_id, "status": "REGISTERED_ON_CHAIN"}
+    return {
+        "tx_hash": tx_hash,
+        "object_id": obj.blockchain_object_id,
+        "status": obj.status,
+        "tx_explorer_url": make_tx_explorer_url(tx_hash),
+    }
 
 
 @router.post("/{obj_id}/assign-owner")
@@ -256,7 +288,7 @@ def assign_owner_pipeline(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Этап 5 — привязка кошелька выпускника."""
+    """Привязка кошелька выпускника после on-chain (владелец документа или admin)."""
     obj = FileService(db).assign_student_wallet(current_user, obj_id, body.student_wallet_address)
     return {
         "message": "Кошелёк привязан",
@@ -276,7 +308,7 @@ def list_document_events(
     rows = (
         db.query(DocumentEvent)
         .filter(DocumentEvent.document_id == obj_id)
-        .order_by(DocumentEvent.timestamp.desc())
+        .order_by(DocumentEvent.timestamp.asc())
         .limit(100)
         .all()
     )

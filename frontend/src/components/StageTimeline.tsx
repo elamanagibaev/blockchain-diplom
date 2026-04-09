@@ -11,6 +11,8 @@ export type StageTimelineProps = {
   blockchainTxHash?: string | null;
   studentWalletAddress?: string | null;
   compact?: boolean;
+  /** Подсветка этапов 4–5 во время автоматической финализации после деканата */
+  highlightAutomation?: boolean;
 };
 
 function hashPreview(h: string): string {
@@ -35,6 +37,14 @@ function deriveSteps(
   const st = status.toUpperCase();
   const hasChain = Boolean(blockchainTxHash);
   const ai = (aiCheckStatus || "skipped").toLowerCase();
+  const postDeanStatuses = [
+    "DEAN_APPROVED",
+    "APPROVED",
+    "REGISTERED",
+    "REGISTERED_ON_CHAIN",
+    "ASSIGNED_TO_OWNER",
+    "TRANSFERRED",
+  ];
 
   // Этап 1: фиксация
   const s1: StepKind = "done";
@@ -45,29 +55,25 @@ function deriveSteps(
   else if (ai === "passed") s2 = "done";
   else s2 = "skipped";
 
-  // Этап 3: экспертиза
+  // Этап 3: одно согласование деканатом (без отдельного этапа кафедры в workflow)
   let s3: StepKind = "pending";
   if (st === "UNDER_REVIEW" || st === "PENDING_APPROVAL") s3 = "active";
-  if (departmentApprovedAt || deaneryApprovedAt) s3 = "active";
-  if (
-    ["APPROVED", "REGISTERED_ON_CHAIN", "TRANSFERRED"].includes(st) ||
-    (departmentApprovedAt && deaneryApprovedAt)
-  ) {
+  if (deaneryApprovedAt || postDeanStatuses.includes(st)) {
     s3 = "done";
   }
   if (st === "REJECTED") s3 = "active";
 
-  // Этап 4: реестр
+  // Этап 4: реестр (после деканата — автоматически)
   let s4: StepKind = "pending";
   if (hasChain) s4 = "done";
-  else if (st === "APPROVED") s4 = "active";
+  else if (st === "DEAN_APPROVED" || st === "APPROVED") s4 = "active";
 
-  // Этап 5: владелец
+  // Этап 5: владелец (автоматически тем же кошельком, что при загрузке)
   let s5: StepKind = "pending";
-  if (studentWalletAddress && hasChain) s5 = "done";
-  else if (hasChain) s5 = "active";
-
-  if (st === "TRANSFERRED" && hasChain) s5 = "done";
+  if (st === "ASSIGNED_TO_OWNER") s5 = "done";
+  else if (st === "TRANSFERRED" && hasChain) s5 = "done";
+  else if (hasChain && studentWalletAddress) s5 = "done";
+  else if (hasChain && (st === "REGISTERED" || st === "REGISTERED_ON_CHAIN")) s5 = "active";
 
   // Полное завершение
   const allDone =
@@ -103,41 +109,50 @@ function deriveSteps(
     },
     {
       n: 3,
-      title: "Экспертное подтверждение",
+      title: "Согласование деканата",
       statusRu:
         s3 === "done"
           ? "Завершён"
           : s3 === "active"
             ? "Активен"
             : "Ожидание",
-      body: [
-        departmentApprovedAt
-          ? `✓ Кафедра: ${new Date(departmentApprovedAt).toLocaleString("ru-RU")}`
-          : "○ Кафедра — ожидание",
-        deaneryApprovedAt
-          ? `✓ Деканат: ${new Date(deaneryApprovedAt).toLocaleString("ru-RU")}`
-          : "○ Деканат — ожидание",
-      ].join("\n"),
+      body: deaneryApprovedAt
+        ? `✓ Деканат: ${new Date(deaneryApprovedAt).toLocaleString("ru-RU")}`
+        : "○ Деканат — проверка и подтверждение",
       kind: s3,
     },
     {
       n: 4,
       title: "Регистрация в реестре",
-      statusRu: hasChain ? "Завершён" : st === "APPROVED" ? "Активен" : "Ожидание",
+      statusRu: hasChain
+        ? "Завершено"
+        : st === "DEAN_APPROVED" || st === "APPROVED"
+          ? "Выполняется"
+          : "Ожидание",
       body: blockchainTxHash
         ? `Транзакция: ${blockchainTxHash.slice(0, 14)}…`
-        : "Запись в смарт-контракте после согласований.",
+        : deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED"
+          ? "Автоматически после согласования деканата (запись хэша в смарт-контракт)."
+          : "Запись в смарт-контракте после согласования деканата.",
       kind: s4,
+      badge: deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED" ? "Авто" : undefined,
     },
     {
       n: 5,
       title: "Закрепление за владельцем",
       statusRu:
-        studentWalletAddress && hasChain ? "Завершён" : hasChain ? "Активен" : "Ожидание",
+        st === "ASSIGNED_TO_OWNER" || (st === "TRANSFERRED" && hasChain)
+          ? "Завершено"
+          : hasChain && studentWalletAddress
+            ? "Завершено"
+            : hasChain
+              ? "Выполняется"
+              : "Ожидание",
       body: studentWalletAddress
         ? `Кошелёк выпускника: ${studentWalletAddress.slice(0, 12)}…`
-        : "Привязка кошелька и QR для публичной проверки.",
+        : "Автоматическая привязка кошелька из данных загрузки и QR для публичной проверки.",
       kind: s5,
+      badge: deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED" ? "Авто" : undefined,
     },
   ];
 
@@ -162,6 +177,7 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
   blockchainTxHash,
   studentWalletAddress,
   compact,
+  highlightAutomation,
 }) => {
   const { lines, sysHint } = deriveSteps(
     status,
@@ -187,7 +203,9 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
         {lines.map((step) => (
           <div
             key={step.n}
-            className={`stage-step stage-step--${step.kind === "skipped" ? "skipped" : step.kind === "done" ? "done" : step.kind === "active" ? "active" : "pending"}`}
+            className={`stage-step stage-step--${step.kind === "skipped" ? "skipped" : step.kind === "done" ? "done" : step.kind === "active" ? "active" : "pending"}${
+              highlightAutomation && (step.n === 4 || step.n === 5) ? " stage-step--automation" : ""
+            }`}
           >
             <div className="stage-step__dot" aria-hidden>
               {dotContent(step.kind, step.n)}

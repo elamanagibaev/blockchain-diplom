@@ -12,10 +12,11 @@ from app.schemas.files import DigitalObjectRead
 from app.schemas.user import UserRead
 from app.constants.document_events import DocumentEventAction
 from app.constants.lifecycle import LifecycleStatus
-from app.services.approval_workflow_service import ApprovalWorkflowService
 from app.services.blockchain_service import BlockchainService
+from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.document_event_service import DocumentEventService
 from app.services.file_service import FileService
+from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -44,6 +45,7 @@ def _doc_to_read(o) -> DigitalObjectRead:
         document_type=o.document_type,
         storage_key=o.storage_key,
         blockchain_registered_at=o.blockchain_registered_at,
+        tx_explorer_url=make_tx_explorer_url(getattr(o, "blockchain_tx_hash", None)),
     )
 
 
@@ -74,23 +76,37 @@ def approve_registration(
     )
     if not obj:
         raise HTTPException(status_code=404, detail="Object not found")
-    if obj.status != LifecycleStatus.APPROVED.value:
+    if obj.status not in (LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value):
         raise HTTPException(
             status_code=400,
-            detail=f"Document must be APPROVED after all stages, got {obj.status}",
+            detail=f"Document must be DEAN_APPROVED after dean stage, got {obj.status}",
         )
     owner = obj.owner
     if not owner:
         raise HTTPException(status_code=400, detail="Document has no owner")
-    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin)
-    # После регистрации в блокчейне переносим файл в MinIO (если MinIO включён)
+    sw = (getattr(obj, "student_wallet_address", None) or "").strip()
+    if sw:
+        DiplomaAutomationService(db).finalize_after_dean_if_ready(obj, current_admin)
+        db.refresh(obj)
+        return {
+            "tx_hash": obj.blockchain_tx_hash,
+            "object_id": obj.blockchain_object_id,
+            "status": obj.status,
+            "tx_explorer_url": make_tx_explorer_url(obj.blockchain_tx_hash),
+        }
+    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin, commit=False)
     try:
         FileService(db).migrate_file_to_minio(obj)
         db.commit()
     except Exception:
         db.rollback()
         raise
-    return {"tx_hash": tx_hash, "object_id": obj.blockchain_object_id, "status": "REGISTERED_ON_CHAIN"}
+    return {
+        "tx_hash": tx_hash,
+        "object_id": obj.blockchain_object_id,
+        "status": "REGISTERED_ON_CHAIN",
+        "tx_explorer_url": make_tx_explorer_url(tx_hash),
+    }
 
 
 @router.post("/documents/{obj_id}/reject")
@@ -104,12 +120,17 @@ def reject_registration(
     if not obj:
         raise HTTPException(status_code=404, detail="Object not found")
     if obj.status == LifecycleStatus.UNDER_REVIEW.value:
-        out = ApprovalWorkflowService(db).reject_current_stage(obj, current_admin, comment="rejected_by_admin")
-        return {"message": "Этап согласования отклонён", "status": out["status"]}
-    if obj.status != LifecycleStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Отклонение на этапе согласования выполняет деканат (POST /approvals/documents/{id}/reject).",
+        )
+    if obj.status not in (
+        LifecycleStatus.APPROVED.value,
+        LifecycleStatus.DEAN_APPROVED.value,
+    ):
         raise HTTPException(
             status_code=400,
-            detail=f"Document must be UNDER_REVIEW or APPROVED, got {obj.status}",
+            detail=f"Document must be APPROVED or DEAN_APPROVED for admin reject, got {obj.status}",
         )
     obj.status = LifecycleStatus.REJECTED.value
     db.add(obj)

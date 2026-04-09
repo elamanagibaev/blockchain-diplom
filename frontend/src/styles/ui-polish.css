@@ -166,6 +166,94 @@
   gap: 14px;
 }
 
+.file-detail-hero-main {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.file-detail-hero-status {
+  flex: 0 0 auto;
+}
+
+.file-detail-hero-actions {
+  flex: 0 1 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: min(280px, 100%);
+}
+
+.file-detail-hero-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-detail-hero-actions-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.file-detail-hero--automation {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--color-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.btn-approval {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-approval:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-approval--primary {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.btn-approval--primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.btn-approval--danger {
+  border-color: color-mix(in srgb, var(--error) 55%, var(--color-border));
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+}
+
+.btn-approval--danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+}
+
+.btn-approval--muted {
+  border-color: var(--color-border);
+  background: var(--color-bg);
+  color: var(--text-muted);
+}
+
+.file-detail-hero-actions-row .btn-approval {
+  flex: 1 1 120px;
+  min-width: 0;
+  width: auto;
+}
+
 .file-detail-hero-title {
   margin: 6px 0 4px;
   font-size: 1.35rem;
@@ -211,6 +299,25 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.blockchain-proof {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.blockchain-proof--onchain {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--success, #2ea043) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--success, #2ea043) 8%, transparent);
+}
+
+.blockchain-explorer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .qr-box {

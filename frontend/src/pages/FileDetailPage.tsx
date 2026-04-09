@@ -21,6 +21,7 @@ type Data = {
   description?: string | null;
   blockchain_object_id?: string | null;
   blockchain_tx_hash?: string | null;
+  tx_explorer_url?: string | null;
   blockchain_registered_at?: string | null;
   owner_id: string;
   owner_wallet_address?: string | null;
@@ -304,6 +305,35 @@ export const FileDetailPage: React.FC = () => {
     void loadEvents();
   }, [id]);
 
+  // Polling + PATCH /status: обновление после согласования деканата (авто этапы 4–5).
+  useEffect(() => {
+    if (!id || !data) return;
+    const pendingChain =
+      (data.status === "DEAN_APPROVED" || data.status === "APPROVED") && !data.blockchain_tx_hash;
+    const pendingAssign =
+      Boolean(data.blockchain_tx_hash) &&
+      !data.student_wallet_address &&
+      (data.status === "REGISTERED" || data.status === "REGISTERED_ON_CHAIN");
+    const waitingAutomation =
+      data.status === "UNDER_REVIEW" || pendingChain || pendingAssign;
+    if (!waitingAutomation) return;
+    const iv = window.setInterval(() => {
+      void (async () => {
+        try {
+          await api.patch(`/files/${id}/status`);
+          const res = await api.get<Data>(`/files/${id}`);
+          setData(res.data);
+          const a = await api.get<ApprovalPayload>(`/approvals/documents/${id}/stages`);
+          setApproval(a.data);
+          await loadEvents();
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 3000);
+    return () => window.clearInterval(iv);
+  }, [id, data?.status, data?.blockchain_tx_hash, data?.student_wallet_address]);
+
   if (error) {
     return (
       <div className="page file-detail-page">
@@ -327,19 +357,30 @@ export const FileDetailPage: React.FC = () => {
   }
 
   const onChainRegistered = Boolean(data.blockchain_tx_hash);
-  const canSubmit = canSubmitForRegistration(data.status, onChainRegistered);
+  const canSubmit =
+    canSubmitForRegistration(data.status, onChainRegistered) && user?.role === "department";
   const isOwner = user?.id === data.owner_id || user?.role === "admin";
 
   const docDisplayName = data.description?.trim() || data.title?.trim() || data.file_name;
   const currentStage = approval?.stages.find((s) => s.state === "CURRENT") ?? null;
   const canActOnStage = Boolean(currentStage?.can_act);
+  const isDeanApprovedPendingChain =
+    (data.status === "DEAN_APPROVED" || data.status === "APPROVED") && !data.blockchain_tx_hash;
+  const isRegisteredPendingAssign =
+    Boolean(data.blockchain_tx_hash) &&
+    !data.student_wallet_address &&
+    (data.status === "REGISTERED" || data.status === "REGISTERED_ON_CHAIN");
+  const automationInProgress = isDeanApprovedPendingChain || isRegisteredPendingAssign;
   const readyForFinal =
-    data.status === "APPROVED" && !onChainRegistered && (approval?.ready_for_final_registration ?? true);
+    (data.status === "DEAN_APPROVED" || data.status === "APPROVED") &&
+    !onChainRegistered &&
+    (approval?.ready_for_final_registration ?? true);
   const isAdmin = user?.role === "admin";
   const canAssignStudent =
-    data.status === "REGISTERED_ON_CHAIN" &&
+    (data.status === "REGISTERED_ON_CHAIN" || data.status === "REGISTERED") &&
     !data.student_wallet_address &&
     (isOwner || isAdmin);
+  const canActDean = canActOnStage && user?.role === "dean";
 
   const stageStateLabel = (state: string) => {
     switch (state) {
@@ -363,61 +404,9 @@ export const FileDetailPage: React.FC = () => {
         subtitle={docDisplayName}
         backTo={{ to: "/files", label: "Мои документы" }}
         actions={
-          <div className="file-detail-toolbar">
-            {!onChainRegistered && canSubmit && (
-              <button type="button" className="btn-review" onClick={() => void submitForRegistration()} disabled={submitting}>
-                {submitting ? "Отправка…" : "Отправить на согласование"}
-              </button>
-            )}
-            {(data.status === "UNDER_REVIEW" || data.status === "PENDING_APPROVAL") && (
-              <span className="muted" style={{ fontSize: 13 }}>
-                {currentStage ? `Этап: ${currentStage.title}` : "На согласовании"}
-              </span>
-            )}
-            {readyForFinal && isAdmin && (
-              <span className="muted" style={{ fontSize: 13 }}>
-                Готов к финальной регистрации
-              </span>
-            )}
-            {readyForFinal && !isAdmin && (
-              <span className="muted" style={{ fontSize: 13 }}>
-                Ожидайте финальной регистрации администратором
-              </span>
-            )}
-            {readyForFinal && isAdmin && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => void finalRegisterOnChain()}
-                disabled={finalRegistering}
-              >
-                {finalRegistering ? "Регистрация…" : "Финальная регистрация"}
-              </button>
-            )}
-            {canActOnStage && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  onClick={() => void approveCurrentStage()}
-                  disabled={approvalAction !== null}
-                >
-                  {approvalAction === "approve" ? "…" : "Подтвердить этап"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-danger"
-                  onClick={() => void rejectCurrentStage()}
-                  disabled={approvalAction !== null}
-                >
-                  {approvalAction === "reject" ? "…" : "Отклонить этап"}
-                </button>
-              </>
-            )}
-            <Link to={`/certificate/${data.id}`} className="btn btn-outline btn-sm">
-              Сертификат
-            </Link>
-          </div>
+          <Link to={`/certificate/${data.id}`} className="btn btn-outline btn-sm">
+            Сертификат
+          </Link>
         }
       />
 
@@ -427,9 +416,11 @@ export const FileDetailPage: React.FC = () => {
         </p>
       )}
 
-      <div className="card card--premium file-detail-hero">
+      <div
+        className={`card card--premium file-detail-hero${automationInProgress ? " file-detail-hero--automation" : ""}`}
+      >
         <div className="file-detail-hero-top">
-          <div>
+          <div className="file-detail-hero-main">
             <div
               className="muted"
               style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}
@@ -437,12 +428,67 @@ export const FileDetailPage: React.FC = () => {
               Документ
             </div>
             <h1 className="file-detail-hero-title">{docDisplayName}</h1>
+            {(data.status === "UNDER_REVIEW" || data.status === "PENDING_APPROVAL") && (
+              <p className="muted" style={{ fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+                {currentStage ? `Этап: ${currentStage.title}` : "На согласовании у деканата"}
+              </p>
+            )}
           </div>
-          <div>
+          <div className="file-detail-hero-status">
             <span className="muted" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
               Статус
             </span>
             <DocumentStatusBadge status={data.status} onChain={onChainRegistered} />
+          </div>
+          <div className="file-detail-hero-actions">
+            {!onChainRegistered && canSubmit && (
+              <button
+                type="button"
+                className="btn-approval btn-approval--primary"
+                onClick={() => void submitForRegistration()}
+                disabled={submitting}
+              >
+                {submitting ? "Отправка…" : "Отправить на согласование"}
+              </button>
+            )}
+            {canActDean && (
+              <div className="file-detail-hero-actions-row">
+                <button
+                  type="button"
+                  className="btn-approval btn-approval--primary"
+                  onClick={() => void approveCurrentStage()}
+                  disabled={approvalAction !== null}
+                >
+                  {approvalAction === "approve" ? "…" : "Подтвердить диплом"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-approval btn-approval--danger"
+                  onClick={() => void rejectCurrentStage()}
+                  disabled={approvalAction !== null}
+                >
+                  {approvalAction === "reject" ? "…" : "Отклонить"}
+                </button>
+              </div>
+            )}
+            {automationInProgress && (
+              <p className="file-detail-hero-actions-hint muted">
+                {isDeanApprovedPendingChain
+                  ? "Регистрация в блокчейне выполняется автоматически…"
+                  : "Закрепление за кошельком выпускника выполняется автоматически…"}
+              </p>
+            )}
+            {readyForFinal && isAdmin && (
+              <button
+                type="button"
+                className="btn-approval btn-approval--muted"
+                onClick={() => void finalRegisterOnChain()}
+                disabled={finalRegistering}
+                title="Резерв, если автоматика не сработала"
+              >
+                {finalRegistering ? "Регистрация…" : "Ручная регистрация (резерв)"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -504,6 +550,7 @@ export const FileDetailPage: React.FC = () => {
           aiCheckStatus={data.ai_check_status}
           blockchainTxHash={data.blockchain_tx_hash}
           studentWalletAddress={data.student_wallet_address}
+          highlightAutomation={automationInProgress}
         />
       </div>
 
@@ -516,7 +563,11 @@ export const FileDetailPage: React.FC = () => {
                 <p className="ui-card-desc">Транзакция и идентификатор объекта в смарт-контракте.</p>
               </div>
             </div>
-            <BlockchainInfoCard txHash={data.blockchain_tx_hash} objectId={data.blockchain_object_id} />
+            <BlockchainInfoCard
+              txHash={data.blockchain_tx_hash}
+              objectId={data.blockchain_object_id}
+              txExplorerUrl={data.tx_explorer_url}
+            />
             {data.blockchain_registered_at && (
               <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
                 Зарегистрировано: {new Date(data.blockchain_registered_at).toLocaleString()}
@@ -596,7 +647,10 @@ export const FileDetailPage: React.FC = () => {
             <div className="ui-card-head">
               <div>
                 <h2 className="ui-card-title">Согласование</h2>
-                <p className="ui-card-desc">Внутренние этапы до статуса APPROVED и финальной регистрации.</p>
+                <p className="ui-card-desc">
+                  Один этап — подтверждение деканатом; далее регистрация в сети и закрепление за выпускником выполняются
+                  автоматически.
+                </p>
               </div>
             </div>
             {approvalLoading ? (
@@ -608,8 +662,10 @@ export const FileDetailPage: React.FC = () => {
             ) : (
               <>
                 <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-                  {data.status === "APPROVED" && !onChainRegistered
-                    ? "Все этапы пройдены. Документ готов к официальной регистрации администратором."
+                  {automationInProgress
+                    ? isDeanApprovedPendingChain
+                      ? "Деканат подтвердил документ. Выполняются автоматические этапы регистрации в блокчейне и закрепления за выпускником."
+                      : "Выполняется автоматическое закрепление диплома за кошельком выпускника."
                     : `Текущий этап: ${currentStage ? currentStage.title : approval.all_stages_completed ? "завершены" : "—"}`}
                 </p>
                 <div className="ui-table-wrap table-scroll">

@@ -16,6 +16,8 @@ class DigitalObjectCreateResponse(BaseModel):
     created_at: datetime
     blockchain_object_id: str | None = None
     blockchain_tx_hash: str | None = None
+    student_wallet_address: str | None = None
+    tx_explorer_url: str | None = None
 
 
 class DigitalObjectRead(DigitalObjectCreateResponse):

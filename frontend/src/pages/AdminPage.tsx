@@ -27,23 +27,12 @@ type PendingDoc = {
   created_at: string;
 };
 
-type PendingStageDoc = {
-  id: string;
-  file_name: string;
-  status: string;
-  owner_email?: string | null;
-  created_at: string;
-  current_stage_code?: string | null;
-};
-
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
   const [health, setHealth] = useState<Health | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
-  const [pendingStageCode, setPendingStageCode] = useState("DEPARTMENT_REVIEW");
-  const [pendingStageDocs, setPendingStageDocs] = useState<PendingStageDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -52,13 +41,6 @@ export const AdminPage: React.FC = () => {
       .get<PendingDoc[]>("/admin/documents/pending")
       .then((r) => setPendingDocs(r.data))
       .catch(() => setPendingDocs([]));
-  };
-
-  const loadPendingStage = (stageCode: string) => {
-    api
-      .get<PendingStageDoc[]>("/approvals/pending", { params: { stage_code: stageCode } })
-      .then((r) => setPendingStageDocs(r.data))
-      .catch(() => setPendingStageDocs([]));
   };
 
   useEffect(() => {
@@ -74,7 +56,6 @@ export const AdminPage: React.FC = () => {
         .catch(() => setUsers([])),
     ]).finally(() => setLoading(false));
     loadPending();
-    loadPendingStage(pendingStageCode);
   }, []);
 
   const registerViaFilesApi = (id: string) => {
@@ -105,51 +86,6 @@ export const AdminPage: React.FC = () => {
       .finally(() => setActionId(null));
   };
 
-  const pipelineApproveDept = (id: string) => {
-    setActionId(id);
-    api
-      .post(`/files/${id}/approve/department`)
-      .then(() => {
-        loadPendingStage(pendingStageCode);
-        loadPending();
-        notify("success", "Этап кафедры подтверждён (pipeline).");
-      })
-      .catch((err: any) => {
-        notify("error", err?.response?.data?.detail || "Ошибка");
-      })
-      .finally(() => setActionId(null));
-  };
-
-  const pipelineApproveDean = (id: string) => {
-    setActionId(id);
-    api
-      .post(`/files/${id}/approve/deanery`)
-      .then(() => {
-        loadPendingStage(pendingStageCode);
-        loadPending();
-        notify("success", "Этап деканата подтверждён (pipeline).");
-      })
-      .catch((err: any) => {
-        notify("error", err?.response?.data?.detail || "Ошибка");
-      })
-      .finally(() => setActionId(null));
-  };
-
-  const approveStageDoc = (id: string) => {
-    setActionId(id);
-    api
-      .post(`/approvals/documents/${id}/approve`, { comment: null })
-      .then(() => {
-        loadPendingStage(pendingStageCode);
-        loadPending();
-        notify("success", "Этап согласования подтверждён.");
-      })
-      .catch((err: any) => {
-        notify("error", err?.response?.data?.detail || "Ошибка подтверждения этапа");
-      })
-      .finally(() => setActionId(null));
-  };
-
   const rejectDoc = (id: string) => {
     setActionId(id);
     api
@@ -160,21 +96,6 @@ export const AdminPage: React.FC = () => {
       })
       .catch((err: any) => {
         notify("error", err?.response?.data?.detail || "Ошибка отклонения");
-      })
-      .finally(() => setActionId(null));
-  };
-
-  const rejectStageDoc = (id: string) => {
-    setActionId(id);
-    api
-      .post(`/approvals/documents/${id}/reject`, { comment: null })
-      .then(() => {
-        loadPendingStage(pendingStageCode);
-        loadPending();
-        notify("success", "Этап согласования отклонён.");
-      })
-      .catch((err: any) => {
-        notify("error", err?.response?.data?.detail || "Ошибка отклонения этапа");
       })
       .finally(() => setActionId(null));
   };
@@ -220,7 +141,7 @@ export const AdminPage: React.FC = () => {
     <div className="page admin-page">
       <PageHeader
         title="Админ-панель"
-        subtitle="Согласование, финальная регистрация в сети и пользователи"
+        subtitle="Финальная on-chain регистрация и пользователи (согласование — только деканат)"
       />
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,2.2fr) minmax(0,3fr)", gap: 16 }}>
@@ -257,120 +178,18 @@ export const AdminPage: React.FC = () => {
         <div className="card card--subtle">
           <div className="label">Политика доступа</div>
           <div className="muted" style={{ fontSize: 13, lineHeight: 1.45 }}>
-            Роли <code>user</code> и <code>admin</code> разграничивают права: пользователи работают со своими
-            документами; администраторы выполняют финальную on-chain регистрацию и управляют учётными записями.
+            Кафедра загружает и подаёт документ; деканат подтверждает единственный этап согласования; администратор
+            выполняет только финальную запись в блокчейн и управление учётными записями (не участвует в согласовании).
           </div>
         </div>
       </div>
 
-      <section className="admin-zone admin-zone--stages">
-        <div className="admin-zone__head">
-          <h2 className="admin-zone__title">1. Многоэтапное согласование</h2>
-          <p className="admin-zone__sub">
-            Внутренние этапы (кафедра, деканат) до статуса APPROVED. Здесь не создаётся on-chain транзакция.
-          </p>
-        </div>
-        <div className="admin-zone__body">
-          <div className="row" style={{ gap: 8, alignItems: "flex-end", marginBottom: 12 }}>
-            <div style={{ minWidth: 220 }}>
-              <div className="label">Этап</div>
-              <select
-                className="input"
-                value={pendingStageCode}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setPendingStageCode(v);
-                  loadPendingStage(v);
-                }}
-              >
-                <option value="DEPARTMENT_REVIEW">Кафедра</option>
-                <option value="DEAN_REGISTRAR_REVIEW">Деканат / регистратор</option>
-              </select>
-            </div>
-            <button type="button" className="btn btn-muted btn-sm" onClick={() => loadPendingStage(pendingStageCode)}>
-              Обновить
-            </button>
-          </div>
-          {pendingStageDocs.length === 0 ? (
-            <div className="muted" style={{ padding: "8px 0" }}>
-              Нет документов на выбранном этапе.
-            </div>
-          ) : (
-            <div className="ui-table-wrap table-scroll">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th>Документ</th>
-                    <th>Владелец</th>
-                    <th>Дата</th>
-                    <th>Код этапа</th>
-                    <th>Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingStageDocs.map((d) => (
-                    <tr key={d.id}>
-                      <td>{d.file_name}</td>
-                      <td>{d.owner_email || "—"}</td>
-                      <td>{new Date(d.created_at).toLocaleString()}</td>
-                      <td>
-                        <code style={{ fontSize: 11 }}>{d.current_stage_code || "—"}</code>
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-primary"
-                            onClick={() => approveStageDoc(d.id)}
-                            disabled={actionId === d.id}
-                          >
-                            {actionId === d.id ? "…" : "Подтвердить этап"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-danger"
-                            onClick={() => rejectStageDoc(d.id)}
-                            disabled={actionId === d.id}
-                          >
-                            Отклонить этап
-                          </button>
-                          {d.current_stage_code === "DEPARTMENT_REVIEW" && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-muted"
-                              onClick={() => pipelineApproveDept(d.id)}
-                              disabled={actionId === d.id}
-                            >
-                              Pipeline: кафедра
-                            </button>
-                          )}
-                          {d.current_stage_code === "DEAN_REGISTRAR_REVIEW" && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-muted"
-                              onClick={() => pipelineApproveDean(d.id)}
-                              disabled={actionId === d.id}
-                            >
-                              Pipeline: деканат
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
       <section className="admin-zone admin-zone--final">
         <div className="admin-zone__head">
-          <h2 className="admin-zone__title">2. Готовы к финальной регистрации → 3. On-chain</h2>
+          <h2 className="admin-zone__title">Очередь APPROVED → on-chain</h2>
           <p className="admin-zone__sub">
-            Раздел 2: документы со статусом <code>APPROVED</code> без транзакции. Раздел 3: кнопка «Зарегистрировать
-            в сети» выполняет официальную запись в блокчейн (отдельно от этапов согласования).
+            Документы со статусом <code>APPROVED</code> после подтверждения деканатом. Кнопка записывает хэш и метаданные
+            в смарт-контракт.
           </p>
         </div>
         <div className="admin-zone__body">

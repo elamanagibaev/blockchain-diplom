@@ -126,8 +126,12 @@ class PipelineService:
             return 1
         if s == LifecycleStatus.UNDER_REVIEW.value:
             return 3
-        if s == LifecycleStatus.APPROVED.value:
+        if s in (LifecycleStatus.APPROVED.value, LifecycleStatus.DEAN_APPROVED.value):
             return 3
+        if s == LifecycleStatus.REGISTERED.value:
+            return 4
+        if s == LifecycleStatus.ASSIGNED_TO_OWNER.value:
+            return 5
         if s == LifecycleStatus.REGISTERED_ON_CHAIN.value:
             if obj.student_wallet_address:
                 return 5
