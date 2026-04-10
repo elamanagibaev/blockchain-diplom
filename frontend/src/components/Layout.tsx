@@ -92,13 +92,22 @@ export const Layout: React.FC = () => {
               Профиль
             </Link>
             {user?.role === "admin" && (
-              <Link
-                to="/admin"
-                className={`app-nav-link ${isActive("/admin") ? "app-nav-link--active" : ""}`}
-                onClick={() => setNavOpen(false)}
-              >
-                Админ
-              </Link>
+              <>
+                <Link
+                  to="/explorer"
+                  className={`app-nav-link ${isActive("/explorer") ? "app-nav-link--active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  Журнал
+                </Link>
+                <Link
+                  to="/admin"
+                  className={`app-nav-link ${isActive("/admin") ? "app-nav-link--active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  Админ
+                </Link>
+              </>
             )}
           </nav>
 

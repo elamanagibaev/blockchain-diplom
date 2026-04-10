@@ -1,14 +1,16 @@
+import logging
 from uuid import UUID
 from typing import List
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
 from app.api.deps import get_current_admin, get_db
 from app.models.digital_object import DigitalObject
+from app.models.document_event import DocumentEvent
 from app.models.user import User
-from app.schemas.files import DigitalObjectRead
+from app.schemas.files import DigitalObjectRead, DocumentEventJournalRead
 from app.schemas.user import UserRead
 from app.constants.document_events import DocumentEventAction
 from app.constants.lifecycle import LifecycleStatus
@@ -17,6 +19,8 @@ from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.document_event_service import DocumentEventService
 from app.services.file_service import FileService
 from app.utils.block_explorer import make_tx_explorer_url
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -54,6 +58,35 @@ def _doc_to_read(o) -> DigitalObjectRead:
     )
 
 
+@router.get("/journal/document-events", response_model=List[DocumentEventJournalRead])
+def list_journal_document_events(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+    limit: int = Query(500, ge=1, le=2000),
+):
+    """Глобальный журнал document_events для страницы /explorer (только администратор)."""
+    rows = (
+        db.query(DocumentEvent)
+        .options(joinedload(DocumentEvent.document), joinedload(DocumentEvent.user))
+        .order_by(DocumentEvent.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        DocumentEventJournalRead(
+            id=r.id,
+            document_id=r.document_id,
+            action=r.action,
+            timestamp=r.timestamp,
+            user_id=r.user_id,
+            user_email=r.user.email if r.user else None,
+            metadata=r.event_metadata,
+            document_file_name=r.document.file_name if r.document else None,
+        )
+        for r in rows
+    ]
+
+
 @router.get("/documents/pending", response_model=List[DigitalObjectRead])
 def list_pending_registrations(
     db: Session = Depends(get_db),
@@ -71,8 +104,6 @@ def approve_registration(
     current_admin: User = Depends(get_current_admin),
 ):
     """Approve document: register on blockchain, update status to REGISTERED_ON_CHAIN."""
-    from sqlalchemy.orm import joinedload
-
     obj = (
         db.query(DigitalObject)
         .options(joinedload(DigitalObject.owner))
@@ -99,13 +130,32 @@ def approve_registration(
             "status": obj.status,
             "tx_explorer_url": make_tx_explorer_url(obj.blockchain_tx_hash),
         }
-    tx_hash = BlockchainService(db).register_on_chain(obj, owner, initiated_by=current_admin, commit=False)
+    # Сначала фиксируем on-chain + document_events + blockchain_events отдельным commit,
+    # чтобы при сбое MinIO-миграции записи журнала не терялись из-за rollback всей транзакции.
+    tx_hash = BlockchainService(db).register_on_chain(
+        obj, owner, initiated_by=current_admin, commit=True
+    )
+    logger.info(
+        "admin approve_registration: on-chain commit ok doc_id=%s tx_hash=%s",
+        obj_id,
+        tx_hash,
+    )
     try:
         FileService(db).migrate_file_to_minio(obj)
         db.commit()
+        logger.info("admin approve_registration: minio migrate committed doc_id=%s", obj_id)
+    except FileNotFoundError as e:
+        logger.warning(
+            "admin approve_registration: minio migrate skipped (file missing) doc_id=%s: %s",
+            obj_id,
+            e,
+        )
     except Exception:
+        logger.exception(
+            "admin approve_registration: minio migrate failed after on-chain commit doc_id=%s — rollback только изменений миграции",
+            obj_id,
+        )
         db.rollback()
-        raise
     return {
         "tx_hash": tx_hash,
         "object_id": obj.blockchain_object_id,
@@ -146,6 +196,7 @@ def reject_registration(
         metadata={"decision": "rejected"},
     )
     db.commit()
+    logger.info("admin reject_registration: committed doc_id=%s", obj_id)
     db.refresh(obj)
     return {"message": "Заявка отклонена", "status": "REJECTED"}
 

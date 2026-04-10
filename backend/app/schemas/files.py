@@ -56,3 +56,16 @@ class DocumentEventRead(BaseModel):
     timestamp: datetime
     user_id: UUID | None = None
     metadata: dict | None = None
+
+
+class DocumentEventJournalRead(BaseModel):
+    """Глобальный журнал document_events для админ-обозревателя /explorer."""
+
+    id: UUID
+    document_id: UUID | None
+    action: str
+    timestamp: datetime
+    user_id: UUID | None = None
+    user_email: str | None = None
+    metadata: dict | None = None
+    document_file_name: str | None = None

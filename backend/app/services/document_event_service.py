@@ -36,4 +36,11 @@ class DocumentEventService:
             event_metadata=metadata,
         )
         self.db.add(ev)
+        logger.info(
+            "document_event queued in session: action=%s document_id=%s user_id=%s event_id=%s",
+            action,
+            document_id,
+            user_id,
+            getattr(ev, "id", None),
+        )
         return ev

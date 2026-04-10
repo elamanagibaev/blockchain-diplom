@@ -30,4 +30,6 @@ class BlockchainEventRead(BaseModel):
     from_wallet: str | None
     to_wallet: str | None
     initiator_user_id: str | None
+    initiator_email: str | None = None
+    tx_explorer_url: str | None = None
 

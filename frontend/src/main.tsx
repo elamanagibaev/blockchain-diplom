@@ -7,6 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { App } from "./App";
 import "./styles/theme.css";
 import "./styles/app-layout.css";
+import "./styles/tailwind.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

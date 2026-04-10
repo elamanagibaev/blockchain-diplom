@@ -15,6 +15,7 @@ import { WalletProfileViewPage } from "./pages/WalletProfileViewPage";
 import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 import { CertificatePage } from "./pages/CertificatePage";
 import { VerifyDocPage } from "./pages/VerifyDocPage";
+import { ExplorerPage } from "./explorer/ExplorerPage";
 import { BRAND_NAME } from "./constants/brand";
 import { Footer } from "./components/Footer";
 
@@ -44,6 +45,7 @@ export const App: React.FC = () => {
     else if (p.startsWith("/verify/doc")) page = "Публичная справка";
     else if (p.startsWith("/verify")) page = "Верификация";
     else if (p.startsWith("/admin")) page = "Админ-панель";
+    else if (p.startsWith("/explorer")) page = "Журнал операций";
     else if (p.startsWith("/profile")) page = "Профиль";
     else if (p.startsWith("/login")) page = "Вход";
     else if (p.startsWith("/register")) page = "Регистрация";
@@ -68,7 +70,8 @@ export const App: React.FC = () => {
         { path: "global", element: <GlobalRegistryPage /> },
         { path: "profile/user", element: <WalletProfileViewPage /> },
         { path: "profile", element: <ProfilePage /> },
-        { path: "admin", element: <AdminPage /> }
+        { path: "admin", element: <AdminPage /> },
+        { path: "explorer", element: <ExplorerPage /> }
       ]
     },
     { path: "/login", element: <LoginPage /> },

@@ -9,6 +9,7 @@ from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.schemas.blockchain import BlockchainAction, BlockchainEventRead, BlockchainObject
 from app.services.blockchain_service import BlockchainService
+from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/blockchain", tags=["blockchain"])
 
@@ -21,7 +22,7 @@ def list_blockchain_events(
     """Global blockchain journal: REGISTER and TRANSFER events."""
     events = (
         db.query(BlockchainEvent)
-        .options(joinedload(BlockchainEvent.digital_object))
+        .options(joinedload(BlockchainEvent.digital_object), joinedload(BlockchainEvent.initiator))
         .order_by(BlockchainEvent.timestamp.desc())
         .all()
     )
@@ -36,6 +37,8 @@ def list_blockchain_events(
             from_wallet=e.from_wallet,
             to_wallet=e.to_wallet,
             initiator_user_id=str(e.initiator_user_id) if e.initiator_user_id else None,
+            initiator_email=e.initiator.email if e.initiator else None,
+            tx_explorer_url=make_tx_explorer_url(e.tx_hash),
         )
         for e in events
     ]

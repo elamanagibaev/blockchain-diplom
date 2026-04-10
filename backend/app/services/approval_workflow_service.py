@@ -229,7 +229,10 @@ class ApprovalWorkflowService:
                 auto_ok = DiplomaAutomationService(self.db).finalize_after_dean_if_ready(document, actor)
                 self.db.refresh(document)
             except Exception:
-                logger.exception("Post-dean automation failed for document %s", document.id)
+                logger.exception(
+                    "Post-dean automation failed for document %s — rollback текущей сессии (события dean APPROVAL уже в БД)",
+                    document.id,
+                )
                 self.db.rollback()
                 document = (
                     self.db.query(DigitalObject)
