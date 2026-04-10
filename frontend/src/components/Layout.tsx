@@ -4,6 +4,7 @@ import { GraduationCap, Moon, Sun, ChevronDown, LogOut, User } from "lucide-reac
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { Footer } from "./Footer";
+import { BRAND_NAME, BRAND_TAGLINE } from "../constants/brand";
 
 export const Layout: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -47,8 +48,8 @@ export const Layout: React.FC = () => {
               <GraduationCap size={20} strokeWidth={2} />
             </div>
             <div className="app-brand-text">
-              <div className="app-brand-title">ДипломЧейн</div>
-              <div className="app-brand-subtitle">Верификация на блокчейне</div>
+              <div className="app-brand-title">{BRAND_NAME}</div>
+              <div className="app-brand-subtitle">{BRAND_TAGLINE}</div>
             </div>
           </Link>
 

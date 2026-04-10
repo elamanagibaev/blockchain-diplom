@@ -13,6 +13,7 @@ class DigitalObject(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    uploaded_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
 
     file_name = Column(String(255), nullable=False)
     title = Column(String(255), nullable=True)  # display title, defaults to file_name
@@ -45,5 +46,6 @@ class DigitalObject(Base):
     # Кошелёк выпускника: обязателен при загрузке диплома; в реестр и QR уходит после авто-этапов 4–5.
     student_wallet_address = Column(String(100), nullable=True)
 
-    owner = relationship("User", backref="digital_objects")
+    owner = relationship("User", foreign_keys=[owner_id], backref="owned_digital_objects")
+    uploaded_by = relationship("User", foreign_keys=[uploaded_by_id], backref="uploaded_digital_objects")
 

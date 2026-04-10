@@ -63,7 +63,7 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout title="Регистрация" subtitle="Создайте аккаунт для загрузки и верификации дипломов">
+    <AuthLayout title="Регистрация" subtitle="Создайте аккаунт для загрузки и верификации документов">
       <form onSubmit={submit} className="stack">
         <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@university.ru" autoComplete="email" />
         <Input label="ФИО (опционально)" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Иванов И.И." />

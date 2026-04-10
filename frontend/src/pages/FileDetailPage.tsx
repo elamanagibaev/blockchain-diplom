@@ -26,6 +26,9 @@ type Data = {
   owner_id: string;
   owner_wallet_address?: string | null;
   owner_email?: string | null;
+  uploaded_by_id?: string | null;
+  uploaded_by_email?: string | null;
+  uploaded_by_wallet_address?: string | null;
   storage_key?: string;
   document_type?: string | null;
   processing_stage?: number | null;
@@ -84,6 +87,18 @@ function formatEventAction(action: string): string {
 function hashShort(h: string): string {
   if (!h || h.length < 20) return h;
   return `${h.slice(0, 10)}…${h.slice(-8)}`;
+}
+
+function eventSummary(meta: Record<string, unknown> | null): string {
+  if (!meta) return "—";
+  const step = typeof meta.step === "string" ? meta.step : null;
+  const decision = typeof meta.decision === "string" ? meta.decision : null;
+  const tx = typeof meta.tx_hash === "string" ? meta.tx_hash : null;
+  if (step && tx) return `${step} · ${tx.slice(0, 12)}…`;
+  if (step && decision) return `${step} · ${decision}`;
+  if (step) return step;
+  if (tx) return `tx ${tx.slice(0, 12)}…`;
+  return "подробности в JSON";
 }
 
 export const FileDetailPage: React.FC = () => {
@@ -308,12 +323,15 @@ export const FileDetailPage: React.FC = () => {
   // Polling + PATCH /status: обновление после согласования деканата (авто этапы 4–5).
   useEffect(() => {
     if (!id || !data) return;
+    const studentWallet = (data.student_wallet_address || "").toLowerCase();
+    const ownerWallet = (data.owner_wallet_address || "").toLowerCase();
     const pendingChain =
       (data.status === "DEAN_APPROVED" || data.status === "APPROVED") && !data.blockchain_tx_hash;
     const pendingAssign =
       Boolean(data.blockchain_tx_hash) &&
-      !data.student_wallet_address &&
-      (data.status === "REGISTERED" || data.status === "REGISTERED_ON_CHAIN");
+      data.status === "REGISTERED" &&
+      Boolean(studentWallet) &&
+      ownerWallet !== studentWallet;
     const waitingAutomation =
       data.status === "UNDER_REVIEW" || pendingChain || pendingAssign;
     if (!waitingAutomation) return;
@@ -332,7 +350,7 @@ export const FileDetailPage: React.FC = () => {
       })();
     }, 3000);
     return () => window.clearInterval(iv);
-  }, [id, data?.status, data?.blockchain_tx_hash, data?.student_wallet_address]);
+  }, [id, data?.status, data?.blockchain_tx_hash, data?.student_wallet_address, data?.owner_wallet_address]);
 
   if (error) {
     return (
@@ -366,10 +384,13 @@ export const FileDetailPage: React.FC = () => {
   const canActOnStage = Boolean(currentStage?.can_act);
   const isDeanApprovedPendingChain =
     (data.status === "DEAN_APPROVED" || data.status === "APPROVED") && !data.blockchain_tx_hash;
+  const studentWalletLower = (data.student_wallet_address || "").toLowerCase();
+  const ownerWalletLower = (data.owner_wallet_address || "").toLowerCase();
   const isRegisteredPendingAssign =
     Boolean(data.blockchain_tx_hash) &&
-    !data.student_wallet_address &&
-    (data.status === "REGISTERED" || data.status === "REGISTERED_ON_CHAIN");
+    data.status === "REGISTERED" &&
+    Boolean(studentWalletLower) &&
+    ownerWalletLower !== studentWalletLower;
   const automationInProgress = isDeanApprovedPendingChain || isRegisteredPendingAssign;
   const readyForFinal =
     (data.status === "DEAN_APPROVED" || data.status === "APPROVED") &&
@@ -378,7 +399,7 @@ export const FileDetailPage: React.FC = () => {
   const isAdmin = user?.role === "admin";
   const canAssignStudent =
     (data.status === "REGISTERED_ON_CHAIN" || data.status === "REGISTERED") &&
-    !data.student_wallet_address &&
+    (!studentWalletLower || ownerWalletLower !== studentWalletLower) &&
     (isOwner || isAdmin);
   const canActDean = canActOnStage && user?.role === "dean";
 
@@ -495,7 +516,17 @@ export const FileDetailPage: React.FC = () => {
         <div className="file-detail-meta-grid">
           <div className="file-detail-meta-item">
             <div className="label">Владелец</div>
-            <div style={{ fontWeight: 600 }}>{data.owner_email || data.owner_id}</div>
+            <div style={{ fontWeight: 600 }}>{data.owner_email || "Владелец по кошельку"}</div>
+            <div className="muted" style={{ fontSize: 12 }}>
+              {data.owner_wallet_address || data.student_wallet_address || "—"}
+            </div>
+          </div>
+          <div className="file-detail-meta-item">
+            <div className="label">Загрузил</div>
+            <div style={{ fontWeight: 600 }}>{data.uploaded_by_email || data.uploaded_by_id || "—"}</div>
+            <div className="muted" style={{ fontSize: 12 }}>
+              {data.uploaded_by_wallet_address || "—"}
+            </div>
           </div>
           <div className="file-detail-meta-item">
             <div className="label">Файл</div>
@@ -524,7 +555,7 @@ export const FileDetailPage: React.FC = () => {
           </div>
           {data.owner_wallet_address && (
             <div className="file-detail-meta-item">
-              <div className="label">Кошелёк</div>
+              <div className="label">Кошелёк владельца</div>
               <code style={{ fontSize: 11 }}>{data.owner_wallet_address}</code>
             </div>
           )}
@@ -723,10 +754,34 @@ export const FileDetailPage: React.FC = () => {
                         <td style={{ whiteSpace: "nowrap" }}>{new Date(ev.timestamp).toLocaleString()}</td>
                         <td>{formatEventAction(ev.action)}</td>
                         <td>
-                          <code style={{ fontSize: 11 }}>
-                            {ev.metadata ? JSON.stringify(ev.metadata).slice(0, 120) : "—"}
-                            {ev.metadata && JSON.stringify(ev.metadata).length > 120 ? "…" : ""}
-                          </code>
+                          <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                            {eventSummary(ev.metadata)}
+                          </div>
+                          {ev.metadata ? (
+                            <details>
+                              <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
+                                JSON
+                              </summary>
+                              <pre
+                                style={{
+                                  marginTop: 6,
+                                  padding: 8,
+                                  border: "1px solid var(--border)",
+                                  borderRadius: 6,
+                                  maxWidth: 460,
+                                  maxHeight: 180,
+                                  overflow: "auto",
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {JSON.stringify(ev.metadata, null, 2)}
+                              </pre>
+                            </details>
+                          ) : (
+                            <code style={{ fontSize: 11 }}>—</code>
+                          )}
                         </td>
                       </tr>
                     ))}

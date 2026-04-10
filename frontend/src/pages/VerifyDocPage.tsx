@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Spinner } from "../components/ui/Spinner";
+import { Footer } from "../components/Footer";
+import { BRAND_NAME } from "../constants/brand";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
@@ -59,7 +61,7 @@ export const VerifyDocPage: React.FC = () => {
             >
               B
             </span>
-            <span>BlockProof</span>
+            <span>{BRAND_NAME}</span>
           </div>
         </header>
         <div className="public-verify-main" style={{ textAlign: "center", paddingTop: 48 }}>
@@ -93,7 +95,7 @@ export const VerifyDocPage: React.FC = () => {
             >
               B
             </span>
-            <span>BlockProof</span>
+            <span>{BRAND_NAME}</span>
           </div>
           <Link to="/verify" className="btn btn-outline btn-sm">
             Проверка по файлу
@@ -145,7 +147,7 @@ export const VerifyDocPage: React.FC = () => {
           >
             B
           </span>
-          <span>BlockProof — публичная справка</span>
+          <span>{BRAND_NAME} — публичная справка</span>
         </div>
         <Link to="/verify" className="btn btn-outline btn-sm">
           Полная верификация
@@ -155,7 +157,7 @@ export const VerifyDocPage: React.FC = () => {
       <main className="public-verify-main">
         <p className="muted" style={{ margin: "0 0 8px", fontSize: 13, lineHeight: 1.5 }}>
           Подлинность файла по содержимому подтверждается на странице{" "}
-          <Link to="/verify" style={{ color: "var(--color-primary)" }}>
+          <Link to="/verify" style={{ color: "var(--accent)" }}>
             верификации
           </Link>{" "}
           (SHA-256). Ниже — справочные данные по идентификатору в системе.
@@ -189,7 +191,9 @@ export const VerifyDocPage: React.FC = () => {
                 <span className="muted">Кошелёк</span>
                 <div style={{ marginTop: 6 }}>
                   {data.owner_wallet_address ? (
-                    <code style={{ fontSize: 12 }}>{data.owner_wallet_address}</code>
+                    <code className="mono-break" style={{ fontSize: 12 }}>
+                      {data.owner_wallet_address}
+                    </code>
                   ) : (
                     "—"
                   )}
@@ -217,6 +221,7 @@ export const VerifyDocPage: React.FC = () => {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 };

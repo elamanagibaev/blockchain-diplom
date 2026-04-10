@@ -24,6 +24,9 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     owner_id: UUID
     owner_wallet_address: str | None = None
     owner_email: str | None = None
+    uploaded_by_id: UUID | None = None
+    uploaded_by_email: str | None = None
+    uploaded_by_wallet_address: str | None = None
     title: str | None = None
     document_type: str | None = None
     storage_key: str

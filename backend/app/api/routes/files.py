@@ -157,6 +157,11 @@ def _to_read(
         owner_id=o.owner_id,
         owner_wallet_address=o.owner_wallet_address or (o.owner.wallet_address if o.owner else None),
         owner_email=owner_email or (o.owner.email if o.owner else None),
+        uploaded_by_id=getattr(o, "uploaded_by_id", None),
+        uploaded_by_email=(o.uploaded_by.email if getattr(o, "uploaded_by", None) else None),
+        uploaded_by_wallet_address=(
+            o.uploaded_by.wallet_address if getattr(o, "uploaded_by", None) else None
+        ),
         title=o.title or o.file_name,
         document_type=o.document_type,
         storage_key=o.storage_key,

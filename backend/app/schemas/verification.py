@@ -24,6 +24,7 @@ class FileVerificationResult(BaseModel):
     file_name: str | None = None
     description: str | None = None
     transaction_hash: str | None = None
+    tx_explorer_url: str | None = None
     blockchain_registered_at: datetime | None = None
     blockchain_object_id: str | None = None
     status: str | None = None

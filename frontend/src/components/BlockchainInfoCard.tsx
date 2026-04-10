@@ -31,17 +31,25 @@ export const BlockchainInfoCard: React.FC<BlockchainInfoCardProps> = ({ txHash, 
   return (
     <div className={`blockchain-proof${txHash ? " blockchain-proof--onchain" : ""}`}>
       {objectId && (
-        <div>
-          <span className="muted">ID объекта в реестре:</span> <code>{objectId}</code>
-        </div>
-      )}
-      {txHash && (
-        <div>
-          <span className="muted">Tx hash:</span> <code>{txHash}</code>
+        <div className="blockchain-proof-row">
+          <span className="muted">Object ID:</span>
+          <code className="mono-break">{objectId}</code>
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            style={{ marginLeft: 8 }}
+            onClick={() => navigator.clipboard.writeText(objectId)}
+          >
+            Копировать
+          </button>
+        </div>
+      )}
+      {txHash && (
+        <div className="blockchain-proof-row">
+          <span className="muted">Tx hash:</span>
+          <code className="mono-break">{txHash}</code>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
             onClick={() => navigator.clipboard.writeText(txHash)}
           >
             Копировать

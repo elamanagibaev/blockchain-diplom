@@ -16,6 +16,8 @@ type DocRow = {
   blockchain_registered_at?: string | null;
   owner_wallet_address?: string | null;
   owner_email?: string | null;
+  uploaded_by_email?: string | null;
+  uploaded_by_wallet_address?: string | null;
   last_transfer_from_wallet?: string | null;
   last_transfer_to_wallet?: string | null;
 };
@@ -214,6 +216,7 @@ export const GlobalRegistryPage: React.FC = () => {
               <thead>
                 <tr>
                   <th>Файл</th>
+                  <th>Загрузил</th>
                   <th>Владелец</th>
                   <th>Покупатель</th>
                   <th>Действие</th>
@@ -231,6 +234,11 @@ export const GlobalRegistryPage: React.FC = () => {
                         <Link to={`/files/${r.id}`} className="registry-doc-link" title={docLabel}>
                           {docLabel}
                         </Link>
+                      </td>
+                      <td>
+                        <span title={r.uploaded_by_email || r.uploaded_by_wallet_address || "—"}>
+                          {r.uploaded_by_email || shortWallet(r.uploaded_by_wallet_address)}
+                        </span>
                       </td>
                       <td>
                         <WalletCell address={r.owner_wallet_address} />

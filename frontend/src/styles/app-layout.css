@@ -222,7 +222,7 @@
 .app-main-inner {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 24px 16px 48px;
+  padding: 24px 16px 40px;
 }
 
 /* Footer */
@@ -237,12 +237,12 @@
   max-width: 1120px;
   margin: 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  font-size: 12px;
+  text-align: center;
+  font-size: 13px;
   color: var(--text-muted);
+  line-height: 1.5;
 }
 
 /* Auth */
@@ -355,17 +355,19 @@
 
 /* Page */
 .page-title {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 8px;
+  line-height: 1.25;
+  margin-bottom: 10px;
   color: var(--text);
 }
 
 .page-subtitle {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-muted);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   max-width: 640px;
+  line-height: 1.55;
 }
 
 .page-header {
@@ -428,6 +430,7 @@
   padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border);
+  vertical-align: top;
 }
 
 .data-table th {
@@ -441,6 +444,9 @@
 
 .data-table tr:last-child td {
   border-bottom: none;
+}
+.data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .data-table a {
@@ -738,6 +744,7 @@
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .stage-step--automation {
@@ -789,6 +796,7 @@
   box-shadow: var(--shadow);
   padding: 20px;
   margin-bottom: 16px;
+  overflow: hidden;
 }
 
 .btn {
@@ -796,6 +804,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 36px;
   padding: 8px 14px;
   font-size: 14px;
   font-weight: 600;
@@ -834,6 +843,7 @@
   color: var(--text-muted);
 }
 .btn-sm {
+  min-height: 30px;
   padding: 5px 10px;
   font-size: 13px;
 }
@@ -859,6 +869,13 @@ textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
+.btn:focus-visible,
+.theme-toggle:focus-visible,
+.app-user-trigger:focus-visible,
+.input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+}
 .label {
   font-size: 13px;
   font-weight: 500;
@@ -883,6 +900,27 @@ textarea:focus {
 /* Legacy class aliases used in older pages */
 .muted {
   color: var(--text-muted);
+}
+.mono-break {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.blockchain-proof {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.blockchain-proof-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  width: 100%;
 }
 .bad {
   color: var(--error);
@@ -1145,5 +1183,13 @@ textarea:focus {
 
   .app-header-inner {
     flex-wrap: wrap;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .blockchain-proof-row {
+    grid-template-columns: 1fr;
   }
 }

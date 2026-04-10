@@ -41,6 +41,23 @@ services:
     networks:
       - app-net
 
+  explorer:
+    build:
+      context: ./explorer
+      dockerfile: ../Dockerfile.explorer
+    depends_on:
+      - blockchain
+    environment:
+      - EXPLORER_RPC_URL=http://blockchain:8545
+      - EXPLORER_CHAIN_ID=31337
+      - EXPLORER_CHAIN_NAME=Hardhat Local
+      - EXPLORER_HOST=0.0.0.0
+      - EXPLORER_PORT=4000
+    ports:
+      - "4000:4000"
+    networks:
+      - app-net
+
   backend:
     build:
       context: ./backend
@@ -70,7 +87,7 @@ services:
       - CONTRACT_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       - CONTRACT_OWNER_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
       - CHAIN_ID=31337
-      - BLOCK_EXPLORER_URL=https://sepolia.etherscan.io
+      - BLOCK_EXPLORER_URL=http://localhost:4000
       - BACKEND_CORS_ORIGINS=["http://localhost:5173"]
     
     volumes:
@@ -96,6 +113,7 @@ services:
         condition: service_healthy
     environment:
       - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_BLOCK_EXPLORER_URL=http://localhost:4000
     ports:
       - "5173:5173"
     networks:

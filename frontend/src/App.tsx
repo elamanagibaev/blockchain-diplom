@@ -1,5 +1,5 @@
-import React from "react";
-import { Link, useRoutes } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link, useLocation, useRoutes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
@@ -15,18 +15,41 @@ import { WalletProfileViewPage } from "./pages/WalletProfileViewPage";
 import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 import { CertificatePage } from "./pages/CertificatePage";
 import { VerifyDocPage } from "./pages/VerifyDocPage";
+import { BRAND_NAME } from "./constants/brand";
+import { Footer } from "./components/Footer";
 
 const NotFoundPage: React.FC = () => (
-  <div style={{ textAlign: "center", paddingTop: 48, padding: 24 }}>
-    <h1 style={{ marginBottom: 8 }}>404</h1>
-    <p className="muted">Страница не найдена</p>
-    <Link to="/" className="btn btn-primary" style={{ marginTop: 16, display: "inline-block" }}>
-      На главную
-    </Link>
+  <div className="app-shell">
+    <div style={{ textAlign: "center", paddingTop: 48, padding: 24, flex: 1 }}>
+      <h1 style={{ marginBottom: 8 }}>404</h1>
+      <p className="muted">Страница не найдена</p>
+      <Link to="/" className="btn btn-primary" style={{ marginTop: 16, display: "inline-block" }}>
+        На главную
+      </Link>
+    </div>
+    <Footer />
   </div>
 );
 
 export const App: React.FC = () => {
+  const location = useLocation();
+  useEffect(() => {
+    const p = location.pathname;
+    let page = "Платформа верификации документов";
+    if (p === "/") page = "Панель";
+    else if (p.startsWith("/upload")) page = "Загрузка документа";
+    else if (p.startsWith("/files")) page = "Документы";
+    else if (p.startsWith("/global")) page = "Реестр";
+    else if (p.startsWith("/verify/hash")) page = "Проверка по хэшу";
+    else if (p.startsWith("/verify/doc")) page = "Публичная справка";
+    else if (p.startsWith("/verify")) page = "Верификация";
+    else if (p.startsWith("/admin")) page = "Админ-панель";
+    else if (p.startsWith("/profile")) page = "Профиль";
+    else if (p.startsWith("/login")) page = "Вход";
+    else if (p.startsWith("/register")) page = "Регистрация";
+    document.title = `${BRAND_NAME} - ${page}`;
+  }, [location.pathname]);
+
   const element = useRoutes([
     {
       path: "/",

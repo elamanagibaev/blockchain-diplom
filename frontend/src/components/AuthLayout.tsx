@@ -2,6 +2,8 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { GraduationCap, Moon, Sun } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+import { BRAND_NAME } from "../constants/brand";
+import { Footer } from "./Footer";
 
 type AuthLayoutProps = {
   title: string;
@@ -20,7 +22,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
             <GraduationCap size={20} strokeWidth={2} />
           </div>
           <div className="app-brand-text">
-            <div className="app-brand-title">ДипломЧейн</div>
+            <div className="app-brand-title">{BRAND_NAME}</div>
           </div>
         </Link>
         <button
@@ -41,9 +43,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
           {children}
         </div>
       </main>
-      <div className="auth-footer">
-        <span>ДипломЧейн · верификация дипломов на блокчейне</span>
-      </div>
+      <Footer />
     </div>
   );
 };

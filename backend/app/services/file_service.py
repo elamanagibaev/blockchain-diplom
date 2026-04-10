@@ -159,6 +159,7 @@ class FileService:
 
         obj = DigitalObject(
             owner_id=user.id,
+            uploaded_by_id=user.id,
             file_name=filename,
             title=title,
             mime_type=mime,
@@ -184,6 +185,9 @@ class FileService:
                 "file_name": filename,
                 "mime_type": mime,
                 "size_bytes": len(raw),
+                "uploaded_by_id": str(user.id),
+                "uploaded_by_wallet": user.wallet_address,
+                "student_wallet": sw,
             },
         )
         ev.record(
@@ -198,8 +202,13 @@ class FileService:
         return obj
 
     def list_objects(self, user: User) -> list[DigitalObject]:
-        q = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
-        if user.role != "admin":
+        q = self.db.query(DigitalObject).options(
+            joinedload(DigitalObject.owner),
+            joinedload(DigitalObject.uploaded_by),
+        )
+        if user.role == "department":
+            q = q.filter(DigitalObject.uploaded_by_id == user.id)
+        elif user.role != "admin":
             q = q.filter(DigitalObject.owner_id == user.id)
         return q.order_by(DigitalObject.created_at.desc()).all()
 
@@ -213,7 +222,10 @@ class FileService:
         sort_order: str = "desc",
     ) -> list[DigitalObject]:
         """List all documents for global patent registry with search and filters."""
-        query = self.db.query(DigitalObject).options(joinedload(DigitalObject.owner))
+        query = self.db.query(DigitalObject).options(
+            joinedload(DigitalObject.owner),
+            joinedload(DigitalObject.uploaded_by),
+        )
         # До отправки на рассмотрение документ в FROZEN / UPLOADED и не виден в общем реестре
         query = query.filter(
             DigitalObject.status.notin_(
@@ -300,7 +312,7 @@ class FileService:
         """Документы после деканата без on-chain (автоматика не сработала)."""
         return (
             self.db.query(DigitalObject)
-            .options(joinedload(DigitalObject.owner))
+            .options(joinedload(DigitalObject.owner), joinedload(DigitalObject.uploaded_by))
             .filter(
                 DigitalObject.status.in_(
                     [LifecycleStatus.DEAN_APPROVED.value, LifecycleStatus.APPROVED.value]
@@ -314,7 +326,7 @@ class FileService:
         """Get object by id. If require_owner=False, any authenticated user can view (for global registry)."""
         obj = (
             self.db.query(DigitalObject)
-            .options(joinedload(DigitalObject.owner))
+            .options(joinedload(DigitalObject.owner), joinedload(DigitalObject.uploaded_by))
             .filter(DigitalObject.id == obj_id)
             .first()
         )
@@ -467,8 +479,7 @@ class FileService:
     def assign_student_wallet(self, actor: User, obj_id: UUID, wallet_address: str) -> DigitalObject:
         """Этап 5: привязка кошелька выпускника (владелец или администратор)."""
         raw = (wallet_address or "").strip()
-        if len(raw) < 10 or not raw.startswith("0x"):
-            raise HTTPException(status_code=400, detail="Некорректный адрес кошелька")
+        student_wallet = normalize_student_wallet(raw)
         obj = self.get_object(actor, obj_id)
         if actor.role != "admin" and obj.owner_id != actor.id:
             raise HTTPException(status_code=403, detail="Только владелец или администратор")
@@ -482,8 +493,34 @@ class FileService:
                 status_code=400,
                 detail="Привязка доступна после регистрации в реестре",
             )
-        PipelineService(self.db).on_assign_student(obj, raw, actor.id)
+        matched_owner = (
+            self.db.query(User)
+            .filter(func.lower(User.wallet_address) == func.lower(student_wallet))
+            .first()
+        )
+        previous_owner_id = obj.owner_id
+        previous_owner_wallet = obj.owner_wallet_address or (obj.owner.wallet_address if obj.owner else None)
+        PipelineService(self.db).on_assign_student(obj, student_wallet, actor.id)
+        obj.owner_wallet_address = student_wallet
+        if matched_owner:
+            obj.owner_id = matched_owner.id
         obj.status = LifecycleStatus.ASSIGNED_TO_OWNER.value
+        DocumentEventService(self.db).record(
+            document_id=obj.id,
+            user_id=actor.id,
+            action=DocumentEventAction.APPROVAL.value,
+            metadata={
+                "step": "owner_assigned",
+                "automatic": False,
+                "assigned_by": "manual",
+                "source": "student_wallet_from_upload",
+                "previous_owner_id": str(previous_owner_id) if previous_owner_id else None,
+                "previous_owner_wallet": previous_owner_wallet,
+                "new_owner_id": str(obj.owner_id) if obj.owner_id else None,
+                "new_owner_wallet": student_wallet,
+                "owner_user_found": bool(matched_owner),
+            },
+        )
         self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)

@@ -1,11 +1,11 @@
 import React from "react";
+import { BRAND_FOOTER_TEXT } from "../constants/brand";
 
 export const Footer: React.FC = () => {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <span>© {new Date().getFullYear()} ДипломЧейн</span>
-        <span>Верификация документов с использованием блокчейна</span>
+        <span>{BRAND_FOOTER_TEXT}</span>
       </div>
     </footer>
   );

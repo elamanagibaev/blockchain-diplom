@@ -4,6 +4,36 @@ version: "3.9"
 # Ensure sensitive values are externalized via .env or secrets.
 
 services:
+  blockchain:
+    build:
+      context: ./blockchain
+      dockerfile: ../Dockerfile.blockchain
+    restart: always
+    volumes:
+      - chain_shared:/shared
+    ports:
+      - "8545:8545"
+    networks:
+      - app-net
+
+  explorer:
+    build:
+      context: ./explorer
+      dockerfile: ../Dockerfile.explorer
+    restart: always
+    depends_on:
+      - blockchain
+    environment:
+      - EXPLORER_RPC_URL=${EXPLORER_RPC_URL:-http://blockchain:8545}
+      - EXPLORER_CHAIN_ID=${CHAIN_ID:-31337}
+      - EXPLORER_CHAIN_NAME=${EXPLORER_CHAIN_NAME:-Hardhat Local}
+      - EXPLORER_HOST=0.0.0.0
+      - EXPLORER_PORT=4000
+    ports:
+      - "4000:4000"
+    networks:
+      - app-net
+
   db:
     image: postgres:15
     restart: always
@@ -73,15 +103,17 @@ services:
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-documents}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - WEB3_PROVIDER_URL=${WEB3_PROVIDER_URL:-}
+      - CONTRACT_ADDRESS_FILE=/shared/contract_address.txt
       - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-}
       - CONTRACT_OWNER_PRIVATE_KEY=${CONTRACT_OWNER_PRIVATE_KEY:-}
       - CONTRACT_OWNER_ADDRESS=${CONTRACT_OWNER_ADDRESS:-}
       - CHAIN_ID=${CHAIN_ID:-31337}
-      - BLOCK_EXPLORER_URL=${BLOCK_EXPLORER_URL:-https://sepolia.etherscan.io}
+      - BLOCK_EXPLORER_URL=${BLOCK_EXPLORER_URL:-http://localhost:4000}
       - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
     
     volumes:
       - backend_files:/data/files
+      - chain_shared:/shared
     ports:
       - "8000:8000"
     networks:
@@ -111,6 +143,7 @@ services:
       - backend
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+      - VITE_BLOCK_EXPLORER_URL=${VITE_BLOCK_EXPLORER_URL:-http://localhost:4000}
     ports:
       - "3000:80"
     networks:
@@ -129,6 +162,7 @@ volumes:
   db_data:
   backend_files:
   minio_data:
+  chain_shared:
 
 networks:
   app-net:

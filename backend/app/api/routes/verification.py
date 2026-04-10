@@ -11,6 +11,7 @@ from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.schemas.verification import FileVerificationResult, PublicVerifyDocumentResponse
 from app.services.pipeline_service import PipelineService
+from app.utils.block_explorer import make_tx_explorer_url
 from app.services.verification_service import VerificationService
 from app.utils.sanitizer import sanitize_hash
 
@@ -54,6 +55,7 @@ def _result_from(sha: str, obj, status: str, db: Session | None = None) -> FileV
             file_name=None,
             description=None,
             transaction_hash=None,
+            tx_explorer_url=None,
             blockchain_registered_at=None,
             blockchain_object_id=None,
             status=None,
@@ -94,6 +96,7 @@ def _result_from(sha: str, obj, status: str, db: Session | None = None) -> FileV
         file_name=obj.file_name if obj else None,
         description=obj.description if obj else None,
         transaction_hash=obj.blockchain_tx_hash if obj else None,
+        tx_explorer_url=make_tx_explorer_url(obj.blockchain_tx_hash if obj else None),
         blockchain_registered_at=obj.blockchain_registered_at if obj else None,
         blockchain_object_id=str(obj.blockchain_object_id) if obj and obj.blockchain_object_id else None,
         status=obj.status if obj else None,

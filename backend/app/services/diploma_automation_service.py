@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.constants.document_events import DocumentEventAction
@@ -25,6 +26,62 @@ logger = logging.getLogger(__name__)
 class DiplomaAutomationService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _assign_owner_from_student_wallet(
+        self,
+        document: DigitalObject,
+        student_wallet: str,
+        initiated_by: User,
+        tx_hash: str | None,
+        automatic: bool,
+    ) -> None:
+        """Финализирует ownership в БД по student_wallet после этапа 5."""
+        previous_owner_id = document.owner_id
+        previous_owner_wallet = document.owner_wallet_address or (document.owner.wallet_address if document.owner else None)
+        matched_owner = (
+            self.db.query(User)
+            .filter(func.lower(User.wallet_address) == func.lower(student_wallet))
+            .first()
+        )
+        document.owner_wallet_address = student_wallet
+        if matched_owner:
+            document.owner_id = matched_owner.id
+
+        owner_equals_uploader = bool(
+            matched_owner
+            and getattr(document, "uploaded_by_id", None)
+            and matched_owner.id == document.uploaded_by_id
+        )
+        if owner_equals_uploader:
+            logger.warning(
+                "owner assignment: student wallet equals uploader wallet for document %s",
+                document.id,
+            )
+
+        doc_ts = datetime.now(timezone.utc).isoformat()
+        DocumentEventService(self.db).record(
+            document_id=document.id,
+            user_id=initiated_by.id,
+            action=DocumentEventAction.APPROVAL.value,
+            metadata={
+                "step": "owner_assigned",
+                "automatic": automatic,
+                "workflow": "single_stage_dean",
+                "tx_hash": tx_hash,
+                "timestamp": doc_ts,
+                "tx_explorer_url": make_tx_explorer_url(tx_hash),
+                "assigned_by": "automatic",
+                "source": "student_wallet_from_upload",
+                "student_wallet": student_wallet,
+                "previous_owner_id": str(previous_owner_id) if previous_owner_id else None,
+                "previous_owner_wallet": previous_owner_wallet,
+                "new_owner_id": str(document.owner_id) if document.owner_id else None,
+                "new_owner_wallet": student_wallet,
+                "owner_user_found": bool(matched_owner),
+                "owner_pending_registration": matched_owner is None,
+                "owner_equals_uploader_wallet": owner_equals_uploader,
+            },
+        )
 
     def finalize_after_dean_if_ready(self, document: DigitalObject, initiated_by: User) -> bool:
         """
@@ -69,24 +126,9 @@ class DiplomaAutomationService:
         self.db.refresh(document)
 
         PipelineService(self.db).on_assign_student(document, sw, initiated_by.id)
+        self._assign_owner_from_student_wallet(document, sw, initiated_by, tx_hash, automatic=True)
         document.status = LifecycleStatus.ASSIGNED_TO_OWNER.value
         self.db.add(document)
-
-        doc_ts = datetime.now(timezone.utc).isoformat()
-        DocumentEventService(self.db).record(
-            document_id=document.id,
-            user_id=initiated_by.id,
-            action=DocumentEventAction.APPROVAL.value,
-            metadata={
-                "step": "owner_assigned",
-                "automatic": True,
-                "workflow": "single_stage_dean",
-                "tx_hash": tx_hash,
-                "timestamp": doc_ts,
-                "tx_explorer_url": make_tx_explorer_url(tx_hash),
-                "student_wallet": sw,
-            },
-        )
         self.db.commit()
         self.db.refresh(document)
         return True
@@ -103,31 +145,16 @@ class DiplomaAutomationService:
         if not sw:
             return False
 
-        owner = document.owner
-        if not owner:
-            logger.error("complete_owner_assign_if_pending: document %s has no owner", document.id)
-            return False
-
         PipelineService(self.db).on_assign_student(document, sw, initiated_by.id)
+        self._assign_owner_from_student_wallet(
+            document,
+            sw,
+            initiated_by,
+            document.blockchain_tx_hash,
+            automatic=True,
+        )
         document.status = LifecycleStatus.ASSIGNED_TO_OWNER.value
         self.db.add(document)
-
-        tx_hash = document.blockchain_tx_hash
-        doc_ts = datetime.now(timezone.utc).isoformat()
-        DocumentEventService(self.db).record(
-            document_id=document.id,
-            user_id=initiated_by.id,
-            action=DocumentEventAction.APPROVAL.value,
-            metadata={
-                "step": "owner_assigned",
-                "automatic": True,
-                "workflow": "single_stage_dean",
-                "tx_hash": tx_hash,
-                "timestamp": doc_ts,
-                "tx_explorer_url": make_tx_explorer_url(tx_hash),
-                "student_wallet": sw,
-            },
-        )
         self.db.commit()
         self.db.refresh(document)
         return True

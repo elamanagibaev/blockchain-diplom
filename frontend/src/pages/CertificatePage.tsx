@@ -5,6 +5,8 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { Spinner } from "../components/ui/Spinner";
 import { getExplorerTxUrl } from "../utils/blockExplorer";
+import { BRAND_NAME } from "../constants/brand";
+import { Footer } from "../components/Footer";
 
 type CertData = {
   is_verified: boolean;
@@ -21,6 +23,7 @@ type CertData = {
   blockchain_object_id?: string | null;
   status?: string | null;
   integrity_status: string;
+  tx_explorer_url?: string | null;
 };
 
 type CertificatePageProps = { mode?: "hash" | "id" };
@@ -57,6 +60,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
             blockchain_object_id: d.blockchain_object_id,
             status: d.status,
             integrity_status: d.blockchain_tx_hash ? "OK" : "NOT_FOUND",
+            tx_explorer_url: d.tx_explorer_url ?? null,
           });
         } else {
           setData(d);
@@ -162,12 +166,14 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
   }
 
   const isPublic = mode === "hash";
+  const explorerHref = (data.tx_explorer_url || getExplorerTxUrl(data.transaction_hash || "")).trim();
+  const canOpenExplorer = Boolean(data.transaction_hash && explorerHref);
   return (
     <div className="page certificate-page">
       {isPublic && (
         <div className="certificate-public-header no-print">
           <Link to="/" className="certificate-public-brand">
-            BlockProof
+            {BRAND_NAME}
           </Link>
           <Link to="/verify" className="btn btn-outline btn-sm">
             Верифицировать документ
@@ -188,7 +194,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
 
       <div className="certificate-container">
         <div className="certificate-header">
-          <div className="certificate-logo">BlockProof</div>
+          <div className="certificate-logo">{BRAND_NAME}</div>
           <div className="certificate-subtitle">Платформа верификации патентных документов</div>
           <h1 className="certificate-title">Сертификат подлинности</h1>
         </div>
@@ -234,15 +240,21 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
                     >
                       Копировать
                     </button>
-                    <a
-                      href={getExplorerTxUrl(data.transaction_hash)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-outline btn-sm"
-                      style={{ marginLeft: 8 }}
-                    >
-                      Открыть в обозревателе
-                    </a>
+                    {canOpenExplorer ? (
+                      <a
+                        href={explorerHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-outline btn-sm"
+                        style={{ marginLeft: 8 }}
+                      >
+                        Открыть в обозревателе
+                      </a>
+                    ) : (
+                      <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 8 }} disabled>
+                        Открыть в обозревателе
+                      </button>
+                    )}
                   </dd>
                   {data.blockchain_registered_at && (
                     <>
@@ -275,12 +287,13 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
         </div>
 
         <div className="certificate-footer">
-          <p>BlockProof — верификация патентных документов</p>
+          <p>{BRAND_NAME} — верификация документов</p>
           <p className="muted" style={{ fontSize: 11 }}>
             Сформировано: {new Date().toLocaleString("ru-RU")}
           </p>
         </div>
       </div>
+      {isPublic && <Footer />}
     </div>
   );
 };

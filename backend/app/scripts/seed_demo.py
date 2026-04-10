@@ -26,9 +26,11 @@ from app.db.session import SessionLocal
 from app.models.digital_object import DigitalObject
 from app.models.user import User
 from app.services.approval_workflow_service import ApprovalWorkflowService
+from app.services.blockchain_service import BlockchainService
 from app.services.document_event_service import DocumentEventService
 from app.services.file_service import FileService
 from app.storage.local_storage import LocalStorageBackend
+from app.utils.block_explorer import make_tx_explorer_url
 from app.utils.wallet import generate_evm_wallet, encrypt_private_key
 
 settings = get_settings()
@@ -104,6 +106,10 @@ def _get_dean(db) -> User | None:
     return db.query(User).filter(User.email == "demo.dean@blockproof.local").first()
 
 
+def _get_admin(db) -> User | None:
+    return db.query(User).filter(User.email == "admin@example.com").first()
+
+
 def create_frozen_document(
     db,
     owner: User,
@@ -132,6 +138,7 @@ def create_frozen_document(
     storage_key = storage.save(BytesIO(raw), filename)
     obj = DigitalObject(
         owner_id=owner.id,
+            uploaded_by_id=owner.id,
         file_name=filename,
         title=description[:255],
         mime_type="application/pdf",
@@ -206,6 +213,7 @@ def create_legacy_patentee_frozen_docs(db) -> int:
         storage_key = storage.save(BytesIO(raw), filename)
         obj = DigitalObject(
             owner_id=patentee.id,
+            uploaded_by_id=patentee.id,
             file_name=filename,
             title=filename,
             mime_type=mime,
@@ -282,6 +290,41 @@ def seed_scenario_documents(db, dept: User, dean: User) -> None:
             _approve(db, d3, dean, "деканат")
 
 
+def ensure_demo_on_chain(db, admin: User, dept: User) -> None:
+    """Фиксирует минимум одну демо-запись on-chain для быстрой защиты."""
+    target = (
+        db.query(DigitalObject)
+        .filter(
+            DigitalObject.owner_id == dept.id,
+            DigitalObject.file_name == DOC_APPROVED,
+        )
+        .first()
+    )
+    if not target:
+        print("  On-chain seed: целевой документ не найден")
+        return
+    if target.blockchain_tx_hash:
+        print(
+            f"  On-chain seed: уже зарегистрирован id={target.id} "
+            f"tx={target.blockchain_tx_hash} "
+            f"tx_explorer_url={make_tx_explorer_url(target.blockchain_tx_hash)}"
+        )
+        return
+    if target.status not in ("DEAN_APPROVED", "APPROVED"):
+        print(f"  On-chain seed: статус {target.status} не готов к регистрации, пропуск")
+        return
+    try:
+        tx_hash = BlockchainService(db).register_on_chain(target, dept, initiated_by=admin, commit=True)
+    except HTTPException as e:
+        print(f"  On-chain seed: ошибка регистрации: {e.detail}")
+        return
+    db.refresh(target)
+    print(
+        f"  On-chain seed: document_id={target.id} tx_hash={tx_hash} "
+        f"tx_explorer_url={make_tx_explorer_url(tx_hash)}"
+    )
+
+
 def run() -> None:
     print("Запуск seed_demo.py...")
     db = SessionLocal()
@@ -292,8 +335,9 @@ def run() -> None:
 
         dept = _get_dept(db)
         dean = _get_dean(db)
-        if not dept or not dean:
-            print("Не найдены demo.dept / demo.dean — проверьте DEMO_USERS")
+        admin = _get_admin(db)
+        if not dept or not dean or not admin:
+            print("Не найдены demo.dept / demo.dean / admin@example.com — проверьте DEMO_USERS")
             return
 
         print("Документы (сценарии):")
@@ -302,6 +346,9 @@ def run() -> None:
         print("Документы (legacy patentee@ip.ru):")
         n_legacy = create_legacy_patentee_frozen_docs(db)
         print(f"  Создано новых: {n_legacy}")
+
+        print("On-chain подготовка:")
+        ensure_demo_on_chain(db, admin, dept)
 
         print("\n=== Учётные записи для демо ===")
         print("  Кафедра (загрузка, подача): demo.dept@blockproof.local / Demo2026!")
