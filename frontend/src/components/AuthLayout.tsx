@@ -1,8 +1,7 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { GraduationCap, Moon, Sun } from "lucide-react";
+import { motion } from "framer-motion";
+import { Blocks, Moon, Sun } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
-import { BRAND_NAME } from "../constants/brand";
 import { Footer } from "./Footer";
 
 type AuthLayoutProps = {
@@ -15,35 +14,40 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="auth-shell">
-      <div className="auth-top">
-        <Link to="/login" className="app-brand">
-          <div className="app-brand-mark">
-            <GraduationCap size={20} strokeWidth={2} />
-          </div>
-          <div className="app-brand-text">
-            <div className="app-brand-title">{BRAND_NAME}</div>
-          </div>
-        </Link>
-        <button
-          type="button"
-          className="theme-toggle"
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-        >
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+    <div className="relative flex min-h-screen flex-col bg-background bg-grid-pattern">
+      <div className="pointer-events-none absolute inset-0 gradient-glow opacity-90" aria-hidden />
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-secondary/60 text-muted-foreground transition-colors hover:text-foreground md:right-8 md:top-6"
+        aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+      >
+        {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
+
+      <div className="relative z-10 flex flex-1 flex-col">
+        <main className="flex flex-1 items-center justify-center px-4 pb-12 pt-16">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="relative z-10 w-full max-w-md"
+          >
+            <div className="gradient-card rounded-2xl border border-border p-8 shadow-elevated">
+              <div className="mb-8 flex justify-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl gradient-primary">
+                  <Blocks className="h-6 w-6 text-primary-foreground" />
+                </div>
+              </div>
+              <h1 className="mb-2 text-center text-2xl font-bold text-foreground">{title}</h1>
+              {subtitle ? <p className="mb-8 text-center text-sm text-muted-foreground">{subtitle}</p> : <div className="mb-6" />}
+              {children}
+            </div>
+          </motion.div>
+        </main>
+
+        <Footer />
       </div>
-      <main className="auth-main">
-        <div className="auth-card">
-          <div style={{ marginBottom: 20 }}>
-            <h1 className="auth-header-title">{title}</h1>
-            {subtitle && <div className="auth-header-subtitle">{subtitle}</div>}
-          </div>
-          {children}
-        </div>
-      </main>
-      <Footer />
     </div>
   );
 };

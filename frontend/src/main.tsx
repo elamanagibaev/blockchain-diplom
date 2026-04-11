@@ -6,6 +6,9 @@ import { NotificationProvider } from "./context/NotificationContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { App } from "./App";
 import "./styles/theme.css";
+import "./styles/app-theme.css";
+import "./styles/diploma-design-tokens.css";
+import "./styles/diploma-design-utilities.css";
 import "./styles/app-layout.css";
 import "./styles/tailwind.css";
 

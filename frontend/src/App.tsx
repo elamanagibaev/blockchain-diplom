@@ -20,13 +20,18 @@ import { BRAND_NAME } from "./constants/brand";
 import { Footer } from "./components/Footer";
 
 const NotFoundPage: React.FC = () => (
-  <div className="app-shell">
-    <div style={{ textAlign: "center", paddingTop: 48, padding: 24, flex: 1 }}>
-      <h1 style={{ marginBottom: 8 }}>404</h1>
-      <p className="muted">Страница не найдена</p>
-      <Link to="/" className="btn btn-primary" style={{ marginTop: 16, display: "inline-block" }}>
-        На главную
-      </Link>
+  <div className="flex min-h-screen flex-col bg-background bg-grid-pattern text-foreground">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16">
+      <div className="gradient-card max-w-md rounded-2xl border border-border p-10 text-center shadow-elevated">
+        <h1 className="mb-2 text-4xl font-bold text-primary">404</h1>
+        <p className="mb-8 text-muted-foreground">Страница не найдена</p>
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          На главную
+        </Link>
+      </div>
     </div>
     <Footer />
   </div>
