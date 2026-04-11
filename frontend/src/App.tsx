@@ -16,6 +16,8 @@ import { GlobalRegistryPage } from "./pages/GlobalRegistryPage";
 import { CertificatePage } from "./pages/CertificatePage";
 import { VerifyDocPage } from "./pages/VerifyDocPage";
 import { ExplorerPage } from "./explorer/ExplorerPage";
+import { DeanQueuePage } from "./pages/DeanQueuePage";
+import { LandingPage } from "./pages/LandingPage";
 import { BRAND_NAME } from "./constants/brand";
 import { Footer } from "./components/Footer";
 
@@ -42,7 +44,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     const p = location.pathname;
     let page = "Платформа верификации документов";
-    if (p === "/") page = "Панель";
+    if (p === "/") page = "Главная";
+    else if (p === "/dashboard") page = "Панель";
     else if (p.startsWith("/upload")) page = "Загрузка документа";
     else if (p.startsWith("/files")) page = "Документы";
     else if (p.startsWith("/global")) page = "Реестр";
@@ -51,6 +54,7 @@ export const App: React.FC = () => {
     else if (p.startsWith("/verify")) page = "Верификация";
     else if (p.startsWith("/admin")) page = "Админ-панель";
     else if (p.startsWith("/explorer")) page = "Журнал операций";
+    else if (p.startsWith("/dean-queue")) page = "На согласование";
     else if (p.startsWith("/profile")) page = "Профиль";
     else if (p.startsWith("/login")) page = "Вход";
     else if (p.startsWith("/register")) page = "Регистрация";
@@ -58,25 +62,29 @@ export const App: React.FC = () => {
   }, [location.pathname]);
 
   const element = useRoutes([
+    { path: "/", element: <LandingPage /> },
     {
-      path: "/",
+      element: <Layout />,
+      children: [{ path: "/verify", element: <VerifyPage /> }]
+    },
+    {
       element: (
         <ProtectedRoute>
           <Layout />
         </ProtectedRoute>
       ),
       children: [
-        { index: true, element: <DashboardPage /> },
-        { path: "upload", element: <UploadPage /> },
-        { path: "files", element: <MyFilesPage /> },
-        { path: "files/:id", element: <FileDetailPage /> },
-        { path: "verify", element: <VerifyPage /> },
-        { path: "certificate/:id", element: <CertificatePage /> },
-        { path: "global", element: <GlobalRegistryPage /> },
-        { path: "profile/user", element: <WalletProfileViewPage /> },
-        { path: "profile", element: <ProfilePage /> },
-        { path: "admin", element: <AdminPage /> },
-        { path: "explorer", element: <ExplorerPage /> }
+        { path: "/dashboard", element: <DashboardPage /> },
+        { path: "/upload", element: <UploadPage /> },
+        { path: "/files", element: <MyFilesPage /> },
+        { path: "/files/:id", element: <FileDetailPage /> },
+        { path: "/certificate/:id", element: <CertificatePage /> },
+        { path: "/global", element: <GlobalRegistryPage /> },
+        { path: "/profile/user", element: <WalletProfileViewPage /> },
+        { path: "/profile", element: <ProfilePage /> },
+        { path: "/admin", element: <AdminPage /> },
+        { path: "/explorer", element: <ExplorerPage /> },
+        { path: "/dean-queue", element: <DeanQueuePage /> }
       ]
     },
     { path: "/login", element: <LoginPage /> },

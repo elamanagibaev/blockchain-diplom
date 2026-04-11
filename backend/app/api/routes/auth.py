@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
 from app.models.digital_object import DigitalObject
@@ -14,8 +14,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserRead)
-def register(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
-    return AuthService(db).register_user(user_in)
+def register(user_in: UserCreate, db: Session = Depends(get_db)) -> UserRead:
+    user = AuthService(db).register_user(user_in)
+    user = db.query(User).options(joinedload(User.university)).filter(User.id == user.id).first()
+    return UserRead.from_orm(user)
 
 
 @router.post("/login", response_model=Token)
@@ -69,5 +71,7 @@ def me(
         document_count=doc_count,
         on_chain_count=on_chain,
         created_at=current_user.created_at,
+        university_id=current_user.university_id,
+        university_name=current_user.university.name if current_user.university else None,
     )
 

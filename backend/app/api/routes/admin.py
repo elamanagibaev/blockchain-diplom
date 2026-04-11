@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from app.api.deps import get_current_admin, get_db
 from app.models.digital_object import DigitalObject
 from app.models.document_event import DocumentEvent
+from app.models.university import University
 from app.models.user import User
 from app.schemas.files import DigitalObjectRead, DocumentEventJournalRead
+from app.schemas.university import UniversityCreate, UniversityRead
 from app.schemas.user import UserRead
 from app.constants.document_events import DocumentEventAction
 from app.constants.lifecycle import LifecycleStatus
@@ -28,6 +30,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
     role: str | None = None
+    university_id: int | None = None
 
 
 def _doc_to_read(o) -> DigitalObjectRead:
@@ -203,25 +206,56 @@ def reject_registration(
 
 @router.get("/users", response_model=List[UserRead])
 def list_users(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-    users = db.query(User).order_by(User.created_at.desc()).all()
-    return users
+    users = db.query(User).options(joinedload(User.university)).order_by(User.created_at.desc()).all()
+    return [UserRead.from_orm(u) for u in users]
 
 
 @router.patch("/users/{user_id}")
 def update_user(
     user_id: UUID,
-    payload: UserUpdateRequest = Body(default=UserUpdateRequest()),
+    payload: UserUpdateRequest = Body(...),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if payload.is_active is not None:
-        user.is_active = payload.is_active
-    if payload.role is not None:
-        user.role = payload.role
+    updates = payload.model_dump(exclude_unset=True)
+    if "is_active" in updates:
+        user.is_active = updates["is_active"]
+    if "role" in updates:
+        user.role = updates["role"]
+    if "university_id" in updates:
+        user.university_id = updates["university_id"]
     db.add(user)
     db.commit()
-    db.refresh(user)
+    user = db.query(User).options(joinedload(User.university)).filter(User.id == user_id).first()
     return UserRead.from_orm(user)
+
+
+@router.get("/universities", response_model=List[UniversityRead])
+def list_universities(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    return db.query(University).order_by(University.id.asc()).all()
+
+
+@router.post("/universities", response_model=UniversityRead)
+def create_university(
+    body: UniversityCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Укажите название вуза")
+    exists = db.query(University).filter(University.name == name).first()
+    if exists:
+        raise HTTPException(status_code=409, detail="Вуз с таким названием уже существует")
+    short = (body.short_name or "").strip() or None
+    u = University(name=name, short_name=short, is_active=True)
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u

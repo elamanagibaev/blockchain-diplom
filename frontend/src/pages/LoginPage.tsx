@@ -34,7 +34,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       addToLoginHistory(email);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { detail?: string } } };
       const msg = typeof ax?.response?.data?.detail === "string" ? ax.response.data.detail : "Ошибка входа.";

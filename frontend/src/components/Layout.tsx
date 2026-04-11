@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   Blocks,
+  ClipboardCheck,
   FileText,
   Globe,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Footer } from "./Footer";
 import { BRAND_NAME } from "../constants/brand";
 import { cn } from "../lib/utils";
+import { getRoleLabel } from "../utils/roleLabels";
 
 type NavItem = { title: string; path: string; icon: LucideIcon };
 
@@ -42,7 +44,7 @@ function useIsMd() {
 
 export const Layout: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isMd = useIsMd();
@@ -54,7 +56,7 @@ export const Layout: React.FC = () => {
   }, [location.pathname]);
 
   const navItems = useMemo((): NavItem[] => {
-    const items: NavItem[] = [{ title: "Панель", path: "/", icon: LayoutDashboard }];
+    const items: NavItem[] = [{ title: "Панель", path: "/dashboard", icon: LayoutDashboard }];
     if (user?.role === "department") {
       items.push({ title: "Загрузка", path: "/upload", icon: Upload });
     }
@@ -64,6 +66,9 @@ export const Layout: React.FC = () => {
       { title: "Верификация", path: "/verify", icon: ShieldCheck },
       { title: "Профиль", path: "/profile", icon: User }
     );
+    if (user?.role === "dean") {
+      items.push({ title: "На согласование", path: "/dean-queue", icon: ClipboardCheck });
+    }
     if (user?.role === "admin") {
       items.push(
         { title: "Журнал", path: "/explorer", icon: Activity },
@@ -74,17 +79,17 @@ export const Layout: React.FC = () => {
   }, [user?.role]);
 
   const isActive = (path: string) =>
-    location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const onLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
   };
 
   const sidebarWidth = collapsed ? 72 : 260;
   const displayName = user?.email?.split("@")[0] || user?.email || "Пользователь";
   const email = user?.email || "—";
-  const roleLabel = user?.role || "";
+  const roleLabel = user?.role ? getRoleLabel(user.role) : "";
 
   const NavLinks = ({ expanded, layoutIdPrefix, onNavigate }: { expanded: boolean; layoutIdPrefix: string; onNavigate?: () => void }) => (
     <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -176,6 +181,50 @@ export const Layout: React.FC = () => {
       </div>
     </div>
   );
+
+  if (authLoading && location.pathname === "/verify") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Загрузка…
+      </div>
+    );
+  }
+
+  const guestVerifyPage = !user && location.pathname === "/verify";
+
+  if (guestVerifyPage) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur-md md:px-8">
+          <Link to="/" className="flex items-center gap-2 text-foreground no-underline">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg gradient-primary">
+              <Blocks className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <span className="font-semibold">{BRAND_NAME}</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/login"
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "var(--color-accent, #0d9488)" }}
+            >
+              Войти
+            </Link>
+            <Link
+              to="/register"
+              className="rounded-lg border border-border bg-secondary/60 px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+            >
+              Регистрация
+            </Link>
+          </div>
+        </header>
+        <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
+          <Outlet />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">

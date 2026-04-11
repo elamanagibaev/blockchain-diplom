@@ -40,7 +40,7 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     department_approved_at: datetime | None = None
     deanery_approved_at: datetime | None = None
     ai_check_status: str = "skipped"
-    student_wallet_address: str | None = None
+    current_approval_stage_code: str | None = None
 
 
 class Metrics(BaseModel):

@@ -12,11 +12,19 @@ type Health = {
   description?: string;
 };
 
+type University = {
+  id: number;
+  name: string;
+  short_name?: string | null;
+};
+
 type AdminUser = {
   id: string;
   email: string;
   role: string;
   is_active: boolean;
+  university_id?: number | null;
+  university_name?: string | null;
 };
 
 type PendingDoc = {
@@ -32,9 +40,13 @@ export const AdminPage: React.FC = () => {
   const { notify } = useNotification();
   const [health, setHealth] = useState<Health | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [universities, setUniversities] = useState<University[]>([]);
   const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [newUniName, setNewUniName] = useState("");
+  const [newUniShort, setNewUniShort] = useState("");
+  const [addingUni, setAddingUni] = useState(false);
 
   const loadPending = () => {
     api
@@ -54,6 +66,10 @@ export const AdminPage: React.FC = () => {
         .get<AdminUser[]>("/admin/users")
         .then((r) => setUsers(r.data))
         .catch(() => setUsers([])),
+      api
+        .get<University[]>("/admin/universities")
+        .then((r) => setUniversities(r.data))
+        .catch(() => setUniversities([])),
     ]).finally(() => setLoading(false));
     loadPending();
   }, []);
@@ -112,6 +128,55 @@ export const AdminPage: React.FC = () => {
       });
   };
 
+  const updateUniversity = (id: string, universityId: string) => {
+    const university_id = universityId === "" ? null : Number(universityId);
+    api
+      .patch(`/admin/users/${id}`, { university_id })
+      .then((r) => {
+        const row = r.data as AdminUser;
+        setUsers((old) =>
+          old.map((u) =>
+            u.id === id
+              ? {
+                  ...u,
+                  university_id: row.university_id ?? null,
+                  university_name: row.university_name ?? null,
+                }
+              : u
+          )
+        );
+        notify("success", "Университет обновлён");
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Ошибка обновления вуза");
+      });
+  };
+
+  const addUniversity = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newUniName.trim();
+    if (!name) {
+      notify("error", "Введите название вуза");
+      return;
+    }
+    setAddingUni(true);
+    api
+      .post<University>("/admin/universities", {
+        name,
+        short_name: newUniShort.trim() || null,
+      })
+      .then((r) => {
+        setUniversities((prev) => [...prev, r.data].sort((a, b) => a.id - b.id));
+        setNewUniName("");
+        setNewUniShort("");
+        notify("success", "Вуз добавлен");
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Ошибка добавления вуза");
+      })
+      .finally(() => setAddingUni(false));
+  };
+
   const deleteUser = (id: string) => {
     api
       .delete(`/admin/users/${id}`)
@@ -130,7 +195,7 @@ export const AdminPage: React.FC = () => {
         <PageHeader title="Админ-панель" />
         <div className="card">
           <div className="bad">
-            Требуется роль <code>admin</code> для доступа к административным функциям.
+            Требуется роль Администратор для доступа к административным функциям.
           </div>
         </div>
       </div>
@@ -141,7 +206,7 @@ export const AdminPage: React.FC = () => {
     <div className="page admin-page">
       <PageHeader
         title="Админ-панель"
-        subtitle="Финальная on-chain регистрация и пользователи (согласование — только деканат)"
+        subtitle="Финальная on-chain регистрация, пользователи и справочник вузов (согласование: кафедра → деканат)"
       />
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,2.2fr) minmax(0,3fr)", gap: 16 }}>
@@ -178,8 +243,9 @@ export const AdminPage: React.FC = () => {
         <div className="card card--subtle">
           <div className="label">Политика доступа</div>
           <div className="muted" style={{ fontSize: 13, lineHeight: 1.45 }}>
-            Кафедра загружает и подаёт документ; деканат подтверждает единственный этап согласования; администратор
-            выполняет только финальную запись в блокчейн и управление учётными записями (не участвует в согласовании).
+            Кафедра загружает документ и подаёт его на согласование, подтверждает этап кафедры; деканат согласует второй
+            этап; администратор выполняет только финальную запись в блокчейн и управление учётными записями (не участвует
+            в согласовании).
           </div>
         </div>
       </div>
@@ -255,7 +321,7 @@ export const AdminPage: React.FC = () => {
       <section className="admin-zone admin-zone--users">
         <div className="admin-zone__head">
           <h2 className="admin-zone__title">Пользователи</h2>
-          <p className="admin-zone__sub">Роли и учётные записи платформы.</p>
+          <p className="admin-zone__sub">Роли, вуз и учётные записи платформы.</p>
         </div>
         <div className="admin-zone__body">
           {loading ? (
@@ -269,6 +335,7 @@ export const AdminPage: React.FC = () => {
                   <tr>
                     <th>Email</th>
                     <th>Роль</th>
+                    <th>Университет</th>
                     <th>Активен</th>
                     <th>Действия</th>
                   </tr>
@@ -282,17 +349,32 @@ export const AdminPage: React.FC = () => {
                           value={u.role}
                           onChange={(e) => updateRole(u.id, e.target.value)}
                           className="input"
-                          style={{ maxWidth: 140, fontSize: 13, padding: "6px 8px" }}
+                          style={{ maxWidth: 160, fontSize: 13, padding: "6px 8px" }}
                         >
-                          <option value="user">user</option>
-                          <option value="department">department</option>
-                          <option value="dean">dean</option>
-                          <option value="registrar">registrar</option>
-                          <option value="admin">admin</option>
+                          <option value="user">Студент</option>
+                          <option value="department">Кафедра</option>
+                          <option value="dean">Деканат</option>
+                          <option value="registrar">Регистратор</option>
+                          <option value="admin">Администратор</option>
                         </select>
                       </td>
                       <td>
-                        {u.is_active ? <span className="ok">active</span> : <span className="muted">inactive</span>}
+                        <select
+                          className="input"
+                          style={{ maxWidth: 220, fontSize: 13, padding: "6px 8px" }}
+                          value={u.university_id != null && u.university_id !== undefined ? String(u.university_id) : ""}
+                          onChange={(e) => updateUniversity(u.id, e.target.value)}
+                        >
+                          <option value="">—</option>
+                          {universities.map((uni) => (
+                            <option key={uni.id} value={uni.id}>
+                              {uni.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        {u.is_active ? <span className="ok">Активен</span> : <span className="muted">Неактивен</span>}
                       </td>
                       <td>
                         <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)}>
@@ -305,6 +387,73 @@ export const AdminPage: React.FC = () => {
               </table>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="admin-zone admin-zone--users" style={{ marginTop: 24 }}>
+        <div className="admin-zone__head">
+          <h2 className="admin-zone__title">Университеты</h2>
+          <p className="admin-zone__sub">Справочник вузов для привязки пользователей.</p>
+        </div>
+        <div className="admin-zone__body">
+          <div className="ui-table-wrap table-scroll">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Название</th>
+                  <th>Короткое название</th>
+                </tr>
+              </thead>
+              <tbody>
+                {universities.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="muted">
+                      Нет записей
+                    </td>
+                  </tr>
+                ) : (
+                  universities.map((uni) => (
+                    <tr key={uni.id}>
+                      <td>{uni.id}</td>
+                      <td>{uni.name}</td>
+                      <td>{uni.short_name || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <form onSubmit={addUniversity} className="card card--subtle" style={{ marginTop: 16 }}>
+            <div className="label">Добавить вуз</div>
+            <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+              <div style={{ flex: "1 1 200px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  Название
+                </div>
+                <input
+                  className="input"
+                  value={newUniName}
+                  onChange={(e) => setNewUniName(e.target.value)}
+                  placeholder="Полное название"
+                />
+              </div>
+              <div style={{ flex: "1 1 180px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  Короткое название (необязательно)
+                </div>
+                <input
+                  className="input"
+                  value={newUniShort}
+                  onChange={(e) => setNewUniShort(e.target.value)}
+                  placeholder="Кратко"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={addingUni}>
+                {addingUni ? "…" : "Добавить вуз"}
+              </button>
+            </div>
+          </form>
         </div>
       </section>
     </div>

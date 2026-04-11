@@ -249,8 +249,9 @@ export const FileDetailPage: React.FC = () => {
       await load();
       await loadApproval();
       await loadEvents();
-      notify("success", "Документ отправлен на рассмотрение и отображается в общем реестре.");
+      notify("success", "Документ отправлен на проверку деканату.");
     } catch (err: any) {
+      console.error("submit-for-registration error:", err?.response?.data ?? err?.response ?? err);
       const msg = err?.response?.data?.detail || "Ошибка отправки заявки";
       notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
     } finally {
@@ -441,6 +442,8 @@ export const FileDetailPage: React.FC = () => {
     (isOwner || isAdmin);
   const canActDean = canActOnStage && user?.role === "dean";
   const underReview = data.status === "UNDER_REVIEW" || data.status === "PENDING_APPROVAL";
+  const departmentWaitingForDean =
+    user?.role === "department" && underReview && !canSubmitForRegistration(data.status, onChainRegistered);
   const canOpenDocumentReview =
     underReview && (user?.role === "dean" || user?.role === "registrar");
 
@@ -512,8 +515,24 @@ export const FileDetailPage: React.FC = () => {
                 onClick={() => void submitForRegistration()}
                 disabled={submitting}
               >
-                {submitting ? "Отправка…" : "Отправить на согласование"}
+                {submitting ? "Отправка…" : "Отправить на проверку деканату"}
               </button>
+            )}
+            {departmentWaitingForDean && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "12px 14px",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  background: "rgba(59, 130, 246, 0.12)",
+                  border: "1px solid rgba(59, 130, 246, 0.35)",
+                  borderRadius: 8,
+                  maxWidth: 440,
+                }}
+              >
+                Документ отправлен на согласование. Ожидайте решения деканата.
+              </div>
             )}
             {canOpenDocumentReview && (
               <button

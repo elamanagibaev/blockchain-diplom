@@ -12,7 +12,7 @@ export const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/" replace />;
   return children;
 };
 

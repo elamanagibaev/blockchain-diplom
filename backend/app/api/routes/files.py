@@ -24,6 +24,7 @@ from app.services.blockchain_service import BlockchainService
 from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.file_service import FileService
 from app.services.pipeline_service import PipelineService
+from app.services.approval_workflow_service import ApprovalWorkflowService
 from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -143,6 +144,7 @@ def _to_read(
     o,
     owner_email: str | None = None,
     last_transfer: tuple[str | None, str | None] | None = None,
+    current_approval_stage_code: str | None = None,
 ) -> DigitalObjectRead:
     fr, to = (None, None)
     if last_transfer:
@@ -185,6 +187,7 @@ def _to_read(
         ai_check_status=getattr(o, "ai_check_status", None) or "skipped",
         student_wallet_address=getattr(o, "student_wallet_address", None),
         tx_explorer_url=make_tx_explorer_url(getattr(o, "blockchain_tx_hash", None)),
+        current_approval_stage_code=current_approval_stage_code,
     )
 
 
@@ -195,13 +198,22 @@ def list_files(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    objs = FileService(db).list_objects(current_user)
+    fs = FileService(db)
+    objs = fs.list_objects(current_user)
     if status:
         objs = [o for o in objs if o.status == status]
     if q:
         ql = q.lower()
         objs = [o for o in objs if ql in (o.file_name or "").lower() or ql in (o.sha256_hash or "")]
-    return [_to_read(o) for o in objs]
+    wf = ApprovalWorkflowService(db)
+    wf.ensure_stage_definitions()
+    out: list[DigitalObjectRead] = []
+    for o in objs:
+        stage_code: str | None = None
+        if o.status == LifecycleStatus.UNDER_REVIEW.value:
+            stage_code = wf.get_document_stages(o, current_user).get("current_stage_code")
+        out.append(_to_read(o, current_approval_stage_code=stage_code))
+    return out
 
 
 @router.get("/global", response_model=list[DigitalObjectRead])
@@ -237,15 +249,26 @@ def files_metrics(
     return data
 
 
+@router.post("/{obj_id}/submit-for-review")
+def submit_for_review(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Подача на согласование: этап кафедры, затем деканат."""
+    obj = FileService(db).submit_for_registration(current_user, obj_id)
+    return {"message": "Заявка на согласование отправлена", "status": obj.status}
+
+
 @router.post("/{obj_id}/submit-for-registration")
 def submit_for_registration(
     obj_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Подача на единственный этап согласования — проверка деканатом (далее APPROVED → on-chain у admin)."""
+    """Совместимость: то же, что POST /files/{id}/submit-for-review."""
     obj = FileService(db).submit_for_registration(current_user, obj_id)
-    return {"message": "Заявка на регистрацию отправлена", "status": obj.status}
+    return {"message": "Заявка на согласование отправлена", "status": obj.status}
 
 
 @router.post("/{obj_id}/register")

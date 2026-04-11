@@ -247,7 +247,7 @@ class FileService:
 
     def list_objects(self, user: User) -> list[DigitalObject]:
         q = self.db.query(DigitalObject).options(
-            joinedload(DigitalObject.owner),
+            joinedload(DigitalObject.owner).joinedload(User.university),
             joinedload(DigitalObject.uploaded_by),
         )
         if user.role == "department":
@@ -319,7 +319,12 @@ class FileService:
                 status_code=403,
                 detail="Подачу на согласование может инициировать только роль department (кафедра).",
             )
-        obj = self.get_object(user, obj_id, require_owner=True)
+        obj = self.get_object(user, obj_id, require_owner=False)
+        if getattr(obj, "uploaded_by_id", None) != user.id and obj.owner_id != user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Недостаточно прав для подачи на согласование",
+            )
         if obj.blockchain_tx_hash:
             raise HTTPException(status_code=400, detail="Документ уже зарегистрирован в блокчейне")
         if not (getattr(obj, "student_wallet_address", None) or "").strip():
@@ -337,6 +342,17 @@ class FileService:
                 status_code=400,
                 detail="Можно подать заявку только для документов в статусе заморозки или после отклонения",
             )
+        owner = obj.owner
+        if (
+            user.university_id
+            and owner
+            and getattr(owner, "university_id", None)
+            and user.university_id != owner.university_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Документ принадлежит студенту другого вуза",
+            )
         obj.status = LifecycleStatus.UNDER_REVIEW.value
         workflow = ApprovalWorkflowService(self.db)
         workflow.ensure_stage_definitions()
@@ -345,9 +361,10 @@ class FileService:
             document_id=obj.id,
             user_id=user.id,
             action=DocumentEventAction.APPROVAL.value,
-            metadata={"step": "submit_for_review", "workflow": "single_stage_dean"},
+            metadata={"step": "submit_for_review", "workflow": "two_stage_department_dean"},
         )
         PipelineService(self.db).on_submit_for_review(obj, user.id)
+        workflow.skip_department_stage_after_submit(obj, user)
         self.db.commit()
         self.db.refresh(obj)
         return obj
@@ -370,7 +387,10 @@ class FileService:
         """Get object by id. If require_owner=False, any authenticated user can view (for global registry)."""
         obj = (
             self.db.query(DigitalObject)
-            .options(joinedload(DigitalObject.owner), joinedload(DigitalObject.uploaded_by))
+            .options(
+                joinedload(DigitalObject.owner).joinedload(User.university),
+                joinedload(DigitalObject.uploaded_by),
+            )
             .filter(DigitalObject.id == obj_id)
             .first()
         )

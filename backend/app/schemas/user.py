@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -34,7 +35,22 @@ class UserRead(BaseModel):
     role: str
     wallet_address: str | None = None
     is_active: bool
+    university_id: int | None = None
+    university_name: str | None = None
 
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_orm(cls, user: Any) -> "UserRead":
+        uni = getattr(user, "university", None)
+        return cls(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            wallet_address=user.wallet_address,
+            is_active=user.is_active,
+            university_id=getattr(user, "university_id", None),
+            university_name=uni.name if uni is not None else None,
+        )

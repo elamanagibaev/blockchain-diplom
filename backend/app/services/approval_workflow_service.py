@@ -22,16 +22,23 @@ ACTION_REJECT = "REJECT"
 
 logger = logging.getLogger(__name__)
 
-# Упрощённая модель (дипломы): один этап — подтверждение деканатом.
+# Двухэтапная модель: кафедра → деканат.
 # Администратор НЕ участвует в согласовании (см. _check_actor_can_act, can_act).
 # Регистратор исключён из workflow.
+STAGE_DEPARTMENT_REVIEW = "DEPARTMENT_REVIEW"
 STAGE_DEAN_REVIEW = "DEAN_REVIEW"
 
 DEFAULT_APPROVAL_STAGES = [
     {
-        "code": STAGE_DEAN_REVIEW,
-        "title": "Деканат",
+        "code": STAGE_DEPARTMENT_REVIEW,
+        "title": "Проверка кафедрой",
         "stage_order": 1,
+        "allowed_roles": ["department"],
+    },
+    {
+        "code": STAGE_DEAN_REVIEW,
+        "title": "Согласование деканатом",
+        "stage_order": 2,
         "allowed_roles": ["dean"],
     },
 ]
@@ -42,15 +49,87 @@ class ApprovalWorkflowService:
         self.db = db
 
     def ensure_stage_definitions(self) -> None:
-        existing = self.db.query(ApprovalStageDefinition).count()
-        if existing:
-            return
-        for stage in DEFAULT_APPROVAL_STAGES:
-            self.db.add(ApprovalStageDefinition(**stage))
+        """Upsert по code: DEPARTMENT_REVIEW (1) и DEAN_REVIEW (2); временный сдвиг stage_order из‑за UNIQUE."""
+        rows = list(self.db.query(ApprovalStageDefinition).all())
+        for i, row in enumerate(rows):
+            row.stage_order = 1000 + i
+        self.db.flush()
+        for stage_data in DEFAULT_APPROVAL_STAGES:
+            existing = (
+                self.db.query(ApprovalStageDefinition)
+                .filter(ApprovalStageDefinition.code == stage_data["code"])
+                .first()
+            )
+            if existing:
+                existing.stage_order = stage_data["stage_order"]
+                existing.allowed_roles = list(stage_data["allowed_roles"])
+                existing.title = stage_data["title"]
+                existing.is_active = True
+            else:
+                self.db.add(
+                    ApprovalStageDefinition(
+                        code=stage_data["code"],
+                        title=stage_data["title"],
+                        stage_order=stage_data["stage_order"],
+                        allowed_roles=list(stage_data["allowed_roles"]),
+                        is_active=True,
+                    )
+                )
         self.db.flush()
 
     def reset_document_actions(self, document_id: UUID) -> None:
         self.db.query(ApprovalAction).filter(ApprovalAction.document_id == document_id).delete()
+        self.db.flush()
+
+    @staticmethod
+    def passes_university_filter(actor: User, doc: DigitalObject) -> bool:
+        """
+        Для dean/department: если у актора нет university_id — видит все документы этапа.
+        Если university_id задан — видит документы своего вуза и документы с owner.university_id IS NULL.
+        """
+        if actor.role not in ("dean", "department"):
+            return True
+        if not getattr(actor, "university_id", None):
+            return True
+        owner = doc.owner
+        owner_uni = owner.university_id if owner else None
+        if owner_uni is None:
+            return True
+        return owner_uni == actor.university_id
+
+    def skip_department_stage_after_submit(self, document: DigitalObject, actor: User) -> None:
+        """После подачи кафедрой: этап DEPARTMENT_REVIEW считается подтверждённым, очередь — DEAN_REVIEW (без commit)."""
+        self.ensure_stage_definitions()
+        if document.status != LifecycleStatus.UNDER_REVIEW.value:
+            return
+        stage = self._current_stage(document.id)
+        if not stage or stage.code != STAGE_DEPARTMENT_REVIEW:
+            return
+        self.db.add(
+            ApprovalAction(
+                document_id=document.id,
+                stage_definition_id=stage.id,
+                actor_user_id=actor.id,
+                action=ACTION_APPROVE,
+                comment="Отправлено кафедрой",
+                action_metadata={"stage_code": STAGE_DEPARTMENT_REVIEW, "auto": True},
+            )
+        )
+        DocumentEventService(self.db).record(
+            document_id=document.id,
+            user_id=actor.id,
+            action=DocumentEventAction.APPROVAL.value,
+            metadata={
+                "decision": "approved",
+                "step": "department_approved",
+                "automatic": True,
+                "workflow": "two_stage_department_dean",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "stage_code": stage.code,
+                "comment": "Отправлено кафедрой",
+            },
+        )
+        PipelineService(self.db).on_department_approved(document, actor)
         self.db.flush()
 
     def _get_stage_definitions(self) -> list[ApprovalStageDefinition]:
@@ -195,15 +274,16 @@ class ApprovalWorkflowService:
                 action_metadata={"stage_code": stage.code},
             )
         )
+        step_label = "department_approved" if stage.code == STAGE_DEPARTMENT_REVIEW else "dean_approved"
         DocumentEventService(self.db).record(
             document_id=document.id,
             user_id=actor.id,
             action=DocumentEventAction.APPROVAL.value,
             metadata={
                 "decision": "approved",
-                "step": "dean_approved",
+                "step": step_label,
                 "automatic": False,
-                "workflow": "single_stage_dean",
+                "workflow": "two_stage_department_dean",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "stage_code": stage.code,
                 "comment": (comment or "").strip() or None,
@@ -212,8 +292,9 @@ class ApprovalWorkflowService:
         self.db.flush()
 
         pipeline = PipelineService(self.db)
-        # Один этап — фиксация согласования деканата (метка времени deanery_approved_at).
-        if stage.code == STAGE_DEAN_REVIEW:
+        if stage.code == STAGE_DEPARTMENT_REVIEW:
+            pipeline.on_department_approved(document, actor)
+        elif stage.code == STAGE_DEAN_REVIEW:
             pipeline.on_deanery_approved(document, actor)
 
         next_stage = self._current_stage(document.id)
@@ -290,7 +371,10 @@ class ApprovalWorkflowService:
 
         docs = (
             self.db.query(DigitalObject)
-            .options(joinedload(DigitalObject.owner))
+            .options(
+                joinedload(DigitalObject.owner).joinedload(User.university),
+                joinedload(DigitalObject.uploaded_by),
+            )
             .filter(DigitalObject.status == LifecycleStatus.UNDER_REVIEW.value)
             .order_by(DigitalObject.created_at.desc())
             .all()
@@ -299,6 +383,8 @@ class ApprovalWorkflowService:
         for doc in docs:
             current = self._current_stage(doc.id)
             if current and current.code == stage_code:
+                if not self.passes_university_filter(actor, doc):
+                    continue
                 result.append(doc)
         return result
 
@@ -307,7 +393,10 @@ class ApprovalWorkflowService:
         self.ensure_stage_definitions()
         docs = (
             self.db.query(DigitalObject)
-            .options(joinedload(DigitalObject.owner))
+            .options(
+                joinedload(DigitalObject.owner).joinedload(User.university),
+                joinedload(DigitalObject.uploaded_by),
+            )
             .filter(DigitalObject.status == LifecycleStatus.UNDER_REVIEW.value)
             .order_by(DigitalObject.created_at.desc())
             .all()
@@ -318,5 +407,7 @@ class ApprovalWorkflowService:
             if not stage:
                 continue
             if actor.role in (stage.allowed_roles or []):
+                if not self.passes_university_filter(actor, doc):
+                    continue
                 result.append(doc)
         return result

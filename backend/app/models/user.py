@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from app.db.session import Base
 
@@ -18,6 +19,8 @@ class User(Base):
     wallet_address = Column(String(100), nullable=True)  # auto-generated on registration
     wallet_encrypted_private_key = Column(Text, nullable=True)  # custodial demo storage
     is_active = Column(Boolean, default=True, nullable=False)
+    university_id = Column(Integer, ForeignKey("universities.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    university = relationship("University", backref="users")

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/ui/Spinner";
+import { getRoleLabel } from "../utils/roleLabels";
 
 type ProfileData = {
   id: string;
@@ -14,6 +15,8 @@ type ProfileData = {
   document_count: number;
   on_chain_count: number;
   created_at: string;
+  university_id?: number | null;
+  university_name?: string | null;
 };
 
 export const ProfilePage: React.FC = () => {
@@ -68,8 +71,13 @@ export const ProfilePage: React.FC = () => {
               </div>
             )}
             <div>
-              <span className="muted">Роль:</span> <code>{data.role}</code>
+              <span className="muted">Роль:</span> <strong>{getRoleLabel(data.role)}</strong>
             </div>
+            {data.university_name && (
+              <div>
+                <span className="muted">Университет:</span> {data.university_name}
+              </div>
+            )}
             <div>
               <span className="muted">Регистрация:</span>{" "}
               {new Date(data.created_at).toLocaleString("ru-RU")}

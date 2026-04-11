@@ -42,8 +42,9 @@ export const MyFilesPage: React.FC = () => {
       await load(search, statusFilter);
       notify("success", "Документ отправлен на рассмотрение.");
     } catch (err: unknown) {
-      const ax = err as { response?: { data?: { detail?: string } } };
-      const msg = ax?.response?.data?.detail || "Ошибка отправки заявки";
+      const ax = err as { response?: { data?: unknown } };
+      console.error("submit-for-registration error:", ax?.response?.data ?? ax?.response ?? err);
+      const msg = (ax?.response?.data as { detail?: string })?.detail || "Ошибка отправки заявки";
       setError(typeof msg === "string" ? msg : "Ошибка отправки заявки");
       notify("error", typeof msg === "string" ? msg : "Ошибка отправки заявки");
     } finally {
@@ -101,6 +102,23 @@ export const MyFilesPage: React.FC = () => {
       </Card>
 
       <Card style={{ marginTop: 16 }}>
+        {user?.role === "department" && (
+          <div
+            className="ok"
+            style={{
+              marginBottom: 16,
+              fontSize: 13,
+              lineHeight: 1.55,
+              padding: "12px 14px",
+              borderRadius: 8,
+              background: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+            }}
+          >
+            <strong>Алгоритм:</strong> загрузите документ → нажмите «Отправить на проверку деканату» — дальше решение
+            принимает деканат.
+          </div>
+        )}
         {loading ? (
           <div className="text-center" style={{ padding: 32 }}>
             <Spinner size={32} />

@@ -8,3 +8,4 @@ from app.models.blockchain_event import BlockchainEvent  # noqa: F401
 from app.models.document_event import DocumentEvent  # noqa: F401
 from app.models.approval_stage_definition import ApprovalStageDefinition  # noqa: F401
 from app.models.approval_action import ApprovalAction  # noqa: F401
+from app.models.university import University  # noqa: F401

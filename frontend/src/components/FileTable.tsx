@@ -10,6 +10,7 @@ export type FileRow = {
   status: string;
   created_at: string;
   blockchain_tx_hash?: string | null;
+  current_approval_stage_code?: string | null;
 };
 
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
@@ -56,7 +57,7 @@ export const FileTable: React.FC<{
       <tbody>
         {items.map((f) => {
           const hasTx = Boolean(f.blockchain_tx_hash);
-          const showSubmit = canSubmitForRegistration(f.status, hasTx);
+          const showSubmit = onSubmitForRegistration && canSubmitForRegistration(f.status, hasTx);
           const name = documentDisplayName(f);
           const missingDescription = !f.description?.trim();
           return (
@@ -85,7 +86,7 @@ export const FileTable: React.FC<{
                       onClick={() => onSubmitForRegistration(f.id)}
                       disabled={loadingId === f.id}
                     >
-                      {loadingId === f.id ? <Spinner size={14} /> : "Рассмотреть"}
+                      {loadingId === f.id ? <Spinner size={14} /> : "Отправить на проверку деканату"}
                     </button>
                   ) : (
                     <span className="muted">—</span>

@@ -10,6 +10,8 @@ export type User = {
   wallet_status?: string;
   document_count?: number;
   on_chain_count?: number;
+  university_id?: number | null;
+  university_name?: string | null;
 };
 
 type AuthContextType = {
