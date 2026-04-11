@@ -360,6 +360,8 @@
   line-height: 1.25;
   margin-bottom: 10px;
   color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .page-subtitle {
@@ -368,6 +370,8 @@
   margin-bottom: 20px;
   max-width: 640px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .page-header {
@@ -431,6 +435,8 @@
   text-align: left;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .data-table th {

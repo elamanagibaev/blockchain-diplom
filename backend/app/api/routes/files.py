@@ -1,6 +1,7 @@
 from collections import defaultdict
 from uuid import UUID
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Body
 from fastapi.responses import StreamingResponse
@@ -26,6 +27,15 @@ from app.services.pipeline_service import PipelineService
 from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+def _attachment_content_disposition(filename: str) -> str:
+    """RFC 5987 filename* so Cyrillic and other Unicode names work in browsers."""
+    name = filename or "file"
+    ascii_fallback = (
+        name.encode("ascii", "replace").decode("ascii").replace('"', "").replace("\\", "") or "file"
+    )
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
 class StudentWalletBody(BaseModel):
@@ -308,8 +318,10 @@ def list_document_events(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Журнал событий документа (владелец или администратор)."""
-    FileService(db).get_object(current_user, obj_id, require_owner=True)
+    """Журнал событий документа (владелец, администратор или согласующие на этапе UNDER_REVIEW)."""
+    fs = FileService(db)
+    obj = fs.get_object(current_user, obj_id, require_owner=False)
+    fs.assert_can_read_document_file(current_user, obj)
     rows = (
         db.query(DocumentEvent)
         .filter(DocumentEvent.document_id == obj_id)
@@ -365,6 +377,6 @@ def download_file(
         stream,
         media_type=mime_type or "application/octet-stream",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": _attachment_content_disposition(filename),
         },
     )

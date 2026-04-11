@@ -81,9 +81,13 @@ def normalize_student_wallet(addr: str) -> str:
 
 
 def _safe_filename(name: str) -> str:
-    # Avoid path traversal and weird characters; keep it readable.
+    """Sanitize uploaded filename: allow Cyrillic and Latin letters, block path/control chars."""
+    name = (name or "").strip() or "file"
     name = name.replace("\\", "_").replace("/", "_")
-    return re.sub(r"[^a-zA-Z0-9._-]+", "_", name)[:200] or "file"
+    name = re.sub(r'[\x00-\x1f<>:"|?*]', "_", name)
+    if name in (".", ".."):
+        name = "file"
+    return name[:255] or "file"
 
 
 def get_storage_backend(backend: str = "auto") -> StorageBackend:
@@ -105,6 +109,46 @@ class FileService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.storage = get_storage_backend()
+
+    @staticmethod
+    def _is_under_review_status(status: str | None) -> bool:
+        if not status:
+            return False
+        if status == LifecycleStatus.UNDER_REVIEW.value:
+            return True
+        # legacy rows
+        return status == "PENDING_APPROVAL"
+
+    def _under_review_reader(self, user: User, obj: DigitalObject) -> bool:
+        """department / dean / registrar may follow a document on review (read metadata / file / events)."""
+        if not self._is_under_review_status(obj.status):
+            return False
+        if user.role not in ("department", "dean", "registrar"):
+            return False
+        if user.role == "department":
+            return obj.owner_id == user.id or getattr(obj, "uploaded_by_id", None) == user.id
+        return True
+
+    def _passes_visibility_or_reviewer(self, user: User, obj: DigitalObject) -> bool:
+        if user.role == "admin":
+            return True
+        if obj.owner_id == user.id:
+            return True
+        if getattr(obj, "uploaded_by_id", None) == user.id:
+            return True
+        if getattr(obj, "visibility", None) == "public":
+            return True
+        return self._under_review_reader(user, obj)
+
+    def assert_can_read_document_file(self, user: User, obj: DigitalObject) -> None:
+        """Who may download or open the binary (incl. dean/registrar while UNDER_REVIEW)."""
+        if user.role == "admin" or obj.owner_id == user.id:
+            return
+        if getattr(obj, "uploaded_by_id", None) == user.id:
+            return
+        if self._under_review_reader(user, obj):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
     def _validate_mime(self, mime: str) -> None:
         if mime in ALLOWED_MIME_EXACT:
@@ -334,7 +378,7 @@ class FileService:
             raise HTTPException(status_code=404, detail="Object not found")
         if require_owner and user.role != "admin" and obj.owner_id != user.id:
             raise HTTPException(status_code=403, detail="Not enough permissions")
-        if user.role != "admin" and obj.owner_id != user.id and obj.visibility != "public":
+        if not require_owner and not self._passes_visibility_or_reviewer(user, obj):
             raise HTTPException(status_code=403, detail="Not enough permissions")
         return obj
 
@@ -358,12 +402,14 @@ class FileService:
         return {"total": total, "on_chain": on_chain, "verified": verified, "invalid": invalid}
 
     def get_download_url(self, user: User, obj_id: UUID) -> str:
-        obj = self.get_object(user, obj_id, require_owner=True)  # only owner can download
+        obj = self.get_object(user, obj_id, require_owner=False)
+        self.assert_can_read_document_file(user, obj)
         return _storage_for_obj(obj).get_url(obj.storage_key)
 
     def get_download_stream(self, user: User, obj_id: UUID):
         """Yield (chunk_generator, filename, mime_type) for streaming download."""
-        obj = self.get_object(user, obj_id, require_owner=True)
+        obj = self.get_object(user, obj_id, require_owner=False)
+        self.assert_can_read_document_file(user, obj)
         storage = _storage_for_obj(obj)
         return storage.get_stream(obj.storage_key), obj.file_name, obj.mime_type
 

@@ -185,7 +185,9 @@ export const VerifyDocPage: React.FC = () => {
             <div className="proof-grid">
               <div className="proof-kv">
                 <span className="muted">Владелец (email)</span>
-                <div style={{ marginTop: 6 }}>{data.owner_email || "—"}</div>
+                <div style={{ marginTop: 6, overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                  {data.owner_email || "—"}
+                </div>
               </div>
               <div className="proof-kv">
                 <span className="muted">Кошелёк</span>

@@ -9,21 +9,6 @@ class Token(BaseModel):
     expires_in: int
 
 
-class WalletChallengeRequest(BaseModel):
-    wallet_address: str
-
-
-class WalletChallengeResponse(BaseModel):
-    message_to_sign: str
-    nonce: str
-    expires_at: str
-
-
-class WalletVerifyRequest(BaseModel):
-    wallet_address: str
-    signature: str
-
-
 class MeResponse(BaseModel):
     id: str
     email: str

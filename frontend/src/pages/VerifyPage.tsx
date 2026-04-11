@@ -237,7 +237,7 @@ export const VerifyPage: React.FC = () => {
                 <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
                   Документ
                 </div>
-                <div style={{ fontSize: 14 }}>
+                <div style={{ fontSize: 14, overflowWrap: "anywhere", wordBreak: "break-word" }}>
                   {result.file_name && <div>Файл: {result.file_name}</div>}
                   {result.digital_object_id && (
                     <div>

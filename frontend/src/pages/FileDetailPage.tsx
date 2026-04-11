@@ -14,6 +14,7 @@ import { StageTimeline } from "../components/StageTimeline";
 type Data = {
   id: string;
   file_name: string;
+  mime_type?: string;
   title?: string | null;
   sha256_hash: string;
   status: string;
@@ -113,6 +114,7 @@ export const FileDetailPage: React.FC = () => {
   const [studentWallet, setStudentWallet] = useState("");
   const [assigningStudent, setAssigningStudent] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [openingDoc, setOpeningDoc] = useState(false);
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null);
@@ -126,6 +128,42 @@ export const FileDetailPage: React.FC = () => {
     if (typeof window === "undefined" || !data?.id) return "";
     return `${window.location.origin}/verify/doc/${data.id}`;
   }, [data?.id]);
+
+  const handleOpenDocumentInNewTab = async () => {
+    if (!id || !data) return;
+    setOpeningDoc(true);
+    try {
+      const res = await api.get(`/files/${id}/download`, { responseType: "blob" });
+      const mime =
+        (typeof res.headers["content-type"] === "string" && res.headers["content-type"]) ||
+        data.mime_type ||
+        "application/octet-stream";
+      const blob = new Blob([res.data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+      notify("success", "Документ открыт в новой вкладке");
+    } catch (err: any) {
+      let msg = "Не удалось открыть документ";
+      const errData = err?.response?.data;
+      if (errData instanceof Blob) {
+        try {
+          const text = await errData.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.detail || msg;
+        } catch {
+          /* ignore */
+        }
+      } else if (typeof errData?.detail === "string") {
+        msg = errData.detail;
+      } else if (Array.isArray(errData?.detail)) {
+        msg = errData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+      }
+      notify("error", msg);
+    } finally {
+      setOpeningDoc(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (!id || !data) return;
@@ -402,6 +440,9 @@ export const FileDetailPage: React.FC = () => {
     (!studentWalletLower || ownerWalletLower !== studentWalletLower) &&
     (isOwner || isAdmin);
   const canActDean = canActOnStage && user?.role === "dean";
+  const underReview = data.status === "UNDER_REVIEW" || data.status === "PENDING_APPROVAL";
+  const canOpenDocumentReview =
+    underReview && (user?.role === "dean" || user?.role === "registrar");
 
   const stageStateLabel = (state: string) => {
     switch (state) {
@@ -448,7 +489,9 @@ export const FileDetailPage: React.FC = () => {
             >
               Документ
             </div>
-            <h1 className="file-detail-hero-title">{docDisplayName}</h1>
+            <h1 className="file-detail-hero-title" title={docDisplayName}>
+              {docDisplayName}
+            </h1>
             {(data.status === "UNDER_REVIEW" || data.status === "PENDING_APPROVAL") && (
               <p className="muted" style={{ fontSize: 13, marginTop: 8, marginBottom: 0 }}>
                 {currentStage ? `Этап: ${currentStage.title}` : "На согласовании у деканата"}
@@ -470,6 +513,16 @@ export const FileDetailPage: React.FC = () => {
                 disabled={submitting}
               >
                 {submitting ? "Отправка…" : "Отправить на согласование"}
+              </button>
+            )}
+            {canOpenDocumentReview && (
+              <button
+                type="button"
+                className="btn-approval btn-approval--muted"
+                onClick={() => void handleOpenDocumentInNewTab()}
+                disabled={openingDoc}
+              >
+                {openingDoc ? "…" : "Открыть документ"}
               </button>
             )}
             {canActDean && (
@@ -530,7 +583,7 @@ export const FileDetailPage: React.FC = () => {
           </div>
           <div className="file-detail-meta-item">
             <div className="label">Файл</div>
-            <div>
+            <div style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
               <strong>{data.file_name}</strong>
               {isOwner && (
                 <button
