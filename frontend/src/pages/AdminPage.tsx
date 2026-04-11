@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
@@ -80,6 +81,7 @@ export const AdminPage: React.FC = () => {
       .post(`/files/${id}/register`)
       .then(() => {
         loadPending();
+        notifyDashboardRefresh();
         notify("success", "Документ зарегистрирован (POST /files/.../register).");
       })
       .catch((err: any) => {
@@ -94,6 +96,7 @@ export const AdminPage: React.FC = () => {
       .post(`/admin/documents/${id}/approve`)
       .then(() => {
         loadPending();
+        notifyDashboardRefresh();
         notify("success", "Документ зарегистрирован в блокчейне.");
       })
       .catch((err: any) => {

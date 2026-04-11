@@ -10,6 +10,7 @@ import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { Spinner } from "../components/ui/Spinner";
 import { BlockchainInfoCard } from "../components/BlockchainInfoCard";
 import { StageTimeline } from "../components/StageTimeline";
+import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
 
 type Data = {
   id: string;
@@ -249,6 +250,7 @@ export const FileDetailPage: React.FC = () => {
       await load();
       await loadApproval();
       await loadEvents();
+      notifyDashboardRefresh();
       notify("success", "Документ отправлен на проверку деканату.");
     } catch (err: any) {
       console.error("submit-for-registration error:", err?.response?.data ?? err?.response ?? err);
@@ -267,6 +269,7 @@ export const FileDetailPage: React.FC = () => {
       await load();
       await loadApproval();
       await loadEvents();
+      notifyDashboardRefresh();
       notify("success", "Этап согласования подтверждён.");
     } catch (err: any) {
       notify("error", err?.response?.data?.detail || "Ошибка подтверждения этапа");
@@ -283,6 +286,7 @@ export const FileDetailPage: React.FC = () => {
       await load();
       await loadApproval();
       await loadEvents();
+      notifyDashboardRefresh();
       notify("success", "Этап согласования отклонён.");
     } catch (err: any) {
       notify("error", err?.response?.data?.detail || "Ошибка отклонения этапа");
@@ -299,6 +303,7 @@ export const FileDetailPage: React.FC = () => {
       await load();
       await loadApproval();
       await loadEvents();
+      notifyDashboardRefresh();
       notify("success", "Документ зарегистрирован в блокчейне.");
     } catch (err: any) {
       notify("error", err?.response?.data?.detail || "Ошибка финальной регистрации");
@@ -317,6 +322,7 @@ export const FileDetailPage: React.FC = () => {
       notify("success", "Кошелёк выпускника привязан.");
       await load();
       await loadEvents();
+      notifyDashboardRefresh();
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Ошибка привязки";
       notify("error", typeof msg === "string" ? msg : "Ошибка привязки");
@@ -333,6 +339,7 @@ export const FileDetailPage: React.FC = () => {
       await api.post(`/files/${id}/transfer`, { to_wallet_address: transferWallet.trim() });
       setTransferWallet("");
       notify("success", "Документ передан.");
+      notifyDashboardRefresh();
       try {
         const res = await api.get<Data>(`/files/${id}`);
         setData(res.data);

@@ -41,6 +41,9 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     deanery_approved_at: datetime | None = None
     ai_check_status: str = "skipped"
     current_approval_stage_code: str | None = None
+    # Для дашборда / аналитики по вузам (из профиля владельца и загрузившего)
+    uploaded_by_university_id: int | None = None
+    owner_university_id: int | None = None
 
 
 class Metrics(BaseModel):

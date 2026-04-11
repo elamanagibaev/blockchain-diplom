@@ -251,7 +251,12 @@ class FileService:
             joinedload(DigitalObject.uploaded_by),
         )
         if user.role == "department":
-            q = q.filter(DigitalObject.uploaded_by_id == user.id)
+            q = q.filter(
+                or_(
+                    DigitalObject.uploaded_by_id == user.id,
+                    DigitalObject.owner_id == user.id,
+                )
+            )
         elif user.role != "admin":
             q = q.filter(DigitalObject.owner_id == user.id)
         return q.order_by(DigitalObject.created_at.desc()).all()
@@ -405,7 +410,15 @@ class FileService:
     def metrics(self, user: User) -> dict[str, int]:
         # aggregated counts for dashboard
         total_q = self.db.query(DigitalObject)
-        if user.role != "admin":
+        if user.role == "department":
+            # Кафедра видит документы, которые загрузила, и те, где она владелец (как в list_objects по смыслу списка)
+            total_q = total_q.filter(
+                or_(
+                    DigitalObject.uploaded_by_id == user.id,
+                    DigitalObject.owner_id == user.id,
+                )
+            )
+        elif user.role != "admin":
             total_q = total_q.filter(DigitalObject.owner_id == user.id)
         total = total_q.count()
 

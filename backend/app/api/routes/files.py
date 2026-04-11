@@ -188,6 +188,16 @@ def _to_read(
         student_wallet_address=getattr(o, "student_wallet_address", None),
         tx_explorer_url=make_tx_explorer_url(getattr(o, "blockchain_tx_hash", None)),
         current_approval_stage_code=current_approval_stage_code,
+        uploaded_by_university_id=(
+            int(o.uploaded_by.university_id)
+            if getattr(o, "uploaded_by", None) is not None and getattr(o.uploaded_by, "university_id", None) is not None
+            else None
+        ),
+        owner_university_id=(
+            int(o.owner.university_id)
+            if o.owner is not None and getattr(o.owner, "university_id", None) is not None
+            else None
+        ),
     )
 
 

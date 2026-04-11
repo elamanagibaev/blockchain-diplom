@@ -6,6 +6,7 @@ import { Spinner } from "../components/ui/Spinner";
 import { useNotification } from "../context/NotificationContext";
 import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/Card";
+import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
 
 export const MyFilesPage: React.FC = () => {
   const location = useLocation();
@@ -40,6 +41,7 @@ export const MyFilesPage: React.FC = () => {
     try {
       await api.post(`/files/${id}/submit-for-registration`);
       await load(search, statusFilter);
+      notifyDashboardRefresh();
       notify("success", "Документ отправлен на рассмотрение.");
     } catch (err: unknown) {
       const ax = err as { response?: { data?: unknown } };

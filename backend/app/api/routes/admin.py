@@ -58,6 +58,16 @@ def _doc_to_read(o) -> DigitalObjectRead:
         storage_key=o.storage_key,
         blockchain_registered_at=o.blockchain_registered_at,
         tx_explorer_url=make_tx_explorer_url(getattr(o, "blockchain_tx_hash", None)),
+        uploaded_by_university_id=(
+            int(o.uploaded_by.university_id)
+            if getattr(o, "uploaded_by", None) is not None and getattr(o.uploaded_by, "university_id", None) is not None
+            else None
+        ),
+        owner_university_id=(
+            int(o.owner.university_id)
+            if o.owner is not None and getattr(o.owner, "university_id", None) is not None
+            else None
+        ),
     )
 
 

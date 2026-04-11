@@ -7,6 +7,7 @@ import { useNotification } from "../context/NotificationContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
 export const UploadPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
@@ -63,6 +64,7 @@ export const UploadPage: React.FC = () => {
       form.append("student_wallet", sw);
       const res = await api.post<{ id: string }>("/files/upload", form);
       notify("success", "Документ загружен, хэш зафиксирован.");
+      notifyDashboardRefresh();
       navigate(`/files/${res.data.id}`);
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { detail?: string } } };
