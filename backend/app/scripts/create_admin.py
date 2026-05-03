@@ -1,4 +1,5 @@
 from app.db.session import SessionLocal
+import app.models  # noqa: F401  # ensure all ORM models are registered
 from app.models.user import User
 from app.core.security import get_password_hash
 

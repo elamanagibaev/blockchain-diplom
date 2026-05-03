@@ -73,5 +73,7 @@ def me(
         created_at=current_user.created_at,
         university_id=current_user.university_id,
         university_name=current_user.university.name if current_user.university else None,
+        enrollment_year=current_user.enrollment_year,
+        major=current_user.major,
     )
 

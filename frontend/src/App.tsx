@@ -18,6 +18,8 @@ import { VerifyDocPage } from "./pages/VerifyDocPage";
 import { ExplorerPage } from "./explorer/ExplorerPage";
 import { DeanQueuePage } from "./pages/DeanQueuePage";
 import { LandingPage } from "./pages/LandingPage";
+import { DepartmentUsersPage } from "./pages/DepartmentUsersPage";
+import { DepartmentGradesPage } from "./pages/DepartmentGradesPage";
 import { BRAND_NAME } from "./constants/brand";
 import { Footer } from "./components/Footer";
 
@@ -84,7 +86,9 @@ export const App: React.FC = () => {
         { path: "/profile", element: <ProfilePage /> },
         { path: "/admin", element: <AdminPage /> },
         { path: "/explorer", element: <ExplorerPage /> },
-        { path: "/dean-queue", element: <DeanQueuePage /> }
+        { path: "/dean-queue", element: <DeanQueuePage /> },
+        { path: "/department/users", element: <DepartmentUsersPage /> },
+        { path: "/department/grades", element: <DepartmentGradesPage /> }
       ]
     },
     { path: "/login", element: <LoginPage /> },

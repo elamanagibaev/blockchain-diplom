@@ -17,15 +17,19 @@ type University = {
   id: number;
   name: string;
   short_name?: string | null;
+  registration_code: string;
 };
 
 type AdminUser = {
   id: string;
   email: string;
+  full_name?: string | null;
   role: string;
   is_active: boolean;
   university_id?: number | null;
   university_name?: string | null;
+  enrollment_year?: number | null;
+  major?: string | null;
 };
 
 type PendingDoc = {
@@ -47,7 +51,9 @@ export const AdminPage: React.FC = () => {
   const [actionId, setActionId] = useState<string | null>(null);
   const [newUniName, setNewUniName] = useState("");
   const [newUniShort, setNewUniShort] = useState("");
+  const [newUniCode, setNewUniCode] = useState("");
   const [addingUni, setAddingUni] = useState(false);
+  const [editingCodes, setEditingCodes] = useState<Record<number, string>>({});
 
   const loadPending = () => {
     api
@@ -162,22 +168,46 @@ export const AdminPage: React.FC = () => {
       notify("error", "Введите название вуза");
       return;
     }
+    const code = newUniCode.trim();
+    if (!/^\d{5}$/.test(code)) {
+      notify("error", "Код вуза должен состоять из 5 цифр");
+      return;
+    }
     setAddingUni(true);
     api
       .post<University>("/admin/universities", {
         name,
         short_name: newUniShort.trim() || null,
+        registration_code: code,
       })
       .then((r) => {
         setUniversities((prev) => [...prev, r.data].sort((a, b) => a.id - b.id));
         setNewUniName("");
         setNewUniShort("");
+        setNewUniCode("");
         notify("success", "Вуз добавлен");
       })
       .catch((err: any) => {
         notify("error", err?.response?.data?.detail || "Ошибка добавления вуза");
       })
       .finally(() => setAddingUni(false));
+  };
+
+  const saveUniCode = (id: number) => {
+    const code = (editingCodes[id] || "").trim();
+    if (!/^\d{5}$/.test(code)) {
+      notify("error", "Код вуза должен состоять из 5 цифр");
+      return;
+    }
+    api
+      .patch<University>(`/admin/universities/${id}/code`, { registration_code: code })
+      .then((r) => {
+        setUniversities((prev) => prev.map((u) => (u.id === id ? r.data : u)));
+        notify("success", "Код вуза обновлён");
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Ошибка обновления кода");
+      });
   };
 
   const deleteUser = (id: string) => {
@@ -268,7 +298,7 @@ export const AdminPage: React.FC = () => {
             </div>
           ) : (
             <div className="ui-table-wrap table-scroll">
-              <table className="w-full">
+              <table className="w-full" style={{ width: "100%", minWidth: 900 }}>
                 <thead>
                   <tr>
                     <th>Документ</th>
@@ -333,59 +363,73 @@ export const AdminPage: React.FC = () => {
             </div>
           ) : (
             <div className="ui-table-wrap table-scroll">
-              <table className="w-full">
+              <table className="w-full" style={{ width: "100%", minWidth: 1200 }}>
                 <thead>
                   <tr>
+                    <th>ID</th>
+                    <th>ФИО</th>
                     <th>Email</th>
                     <th>Роль</th>
                     <th>Университет</th>
+                    <th>Год</th>
+                    <th>Специальность</th>
                     <th>Активен</th>
                     <th>Действия</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td>{u.email}</td>
-                      <td>
-                        <select
-                          value={u.role}
-                          onChange={(e) => updateRole(u.id, e.target.value)}
-                          className="input"
-                          style={{ maxWidth: 160, fontSize: 13, padding: "6px 8px" }}
-                        >
-                          <option value="user">Студент</option>
-                          <option value="department">Кафедра</option>
-                          <option value="dean">Деканат</option>
-                          <option value="registrar">Регистратор</option>
-                          <option value="admin">Администратор</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select
-                          className="input"
-                          style={{ maxWidth: 220, fontSize: 13, padding: "6px 8px" }}
-                          value={u.university_id != null && u.university_id !== undefined ? String(u.university_id) : ""}
-                          onChange={(e) => updateUniversity(u.id, e.target.value)}
-                        >
-                          <option value="">—</option>
-                          {universities.map((uni) => (
-                            <option key={uni.id} value={uni.id}>
-                              {uni.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        {u.is_active ? <span className="ok">Активен</span> : <span className="muted">Неактивен</span>}
-                      </td>
-                      <td>
-                        <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)}>
-                          Удалить
-                        </button>
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="muted">
+                        Пользователей пока нет
                       </td>
                     </tr>
-                  ))}
+                  ) : users.map((u) => (
+                        <tr key={u.id}>
+                          <td>{u.id}</td>
+                          <td>{u.full_name || "—"}</td>
+                          <td>{u.email}</td>
+                          <td>
+                            <select
+                              value={u.role}
+                              onChange={(e) => updateRole(u.id, e.target.value)}
+                              className="input"
+                              style={{ maxWidth: 160, fontSize: 13, padding: "6px 8px" }}
+                            >
+                              <option value="user">Студент</option>
+                              <option value="department">Кафедра</option>
+                              <option value="dean">Деканат</option>
+                              <option value="registrar">Регистратор</option>
+                              <option value="admin">Администратор</option>
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              className="input"
+                              style={{ maxWidth: 220, fontSize: 13, padding: "6px 8px" }}
+                              value={u.university_id != null && u.university_id !== undefined ? String(u.university_id) : ""}
+                              onChange={(e) => updateUniversity(u.id, e.target.value)}
+                            >
+                              <option value="">—</option>
+                              {universities.map((uni) => (
+                                <option key={uni.id} value={uni.id}>
+                                  {uni.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>{u.enrollment_year ?? "—"}</td>
+                          <td>{u.major || "—"}</td>
+                          <td>
+                            {u.is_active ? <span className="ok">Активен</span> : <span className="muted">Неактивен</span>}
+                          </td>
+                          <td>
+                            <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)}>
+                              Удалить
+                            </button>
+                          </td>
+                        </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -400,18 +444,19 @@ export const AdminPage: React.FC = () => {
         </div>
         <div className="admin-zone__body">
           <div className="ui-table-wrap table-scroll">
-            <table className="w-full">
+            <table className="w-full" style={{ width: "100%", minWidth: 900 }}>
               <thead>
                 <tr>
                   <th>ID</th>
                   <th>Название</th>
+                  <th>Код регистрации</th>
                   <th>Короткое название</th>
                 </tr>
               </thead>
               <tbody>
                 {universities.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="muted">
+                    <td colSpan={4} className="muted">
                       Нет записей
                     </td>
                   </tr>
@@ -420,6 +465,23 @@ export const AdminPage: React.FC = () => {
                     <tr key={uni.id}>
                       <td>{uni.id}</td>
                       <td>{uni.name}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            className="input"
+                            style={{ width: 90 }}
+                            maxLength={5}
+                            value={editingCodes[uni.id] ?? uni.registration_code}
+                            onChange={(e) =>
+                              setEditingCodes((prev) => ({ ...prev, [uni.id]: e.target.value.replace(/\D/g, "").slice(0, 5) }))
+                            }
+                            placeholder="12345"
+                          />
+                          <button type="button" className="btn btn-sm btn-muted" onClick={() => saveUniCode(uni.id)}>
+                            Сохранить
+                          </button>
+                        </div>
+                      </td>
                       <td>{uni.short_name || "—"}</td>
                     </tr>
                   ))
@@ -450,6 +512,17 @@ export const AdminPage: React.FC = () => {
                   value={newUniShort}
                   onChange={(e) => setNewUniShort(e.target.value)}
                   placeholder="Кратко"
+                />
+              </div>
+              <div style={{ flex: "0 1 140px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  Код (5 цифр)
+                </div>
+                <input
+                  className="input"
+                  value={newUniCode}
+                  onChange={(e) => setNewUniCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  placeholder="12345"
                 />
               </div>
               <button type="submit" className="btn btn-primary btn-sm" disabled={addingUni}>

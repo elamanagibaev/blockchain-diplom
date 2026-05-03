@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 2400" width="1800" height="2400" font-family="Segoe UI, system-ui, sans-serif">
+  <defs>
+    <style type="text/css"><![CDATA[
+      .title { font-size: 22px; font-weight: 700; fill: #1a1a2e; }
+      .subtitle { font-size: 13px; fill: #555; }
+      .hdr { font-size: 13px; font-weight: 700; fill: #fff; }
+      .pk { font-size: 11px; fill: #0d47a1; font-weight: 600; }
+      .fk { font-size: 11px; fill: #b71c1c; }
+      .fld { font-size: 11px; fill: #333; }
+      .box { fill: #fafafa; stroke: #37474f; stroke-width: 1.5; }
+      .box-h { fill: #37474f; }
+      .line { stroke: #78909c; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    ]]></style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#78909c"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#f5f7fa"/>
+  <text x="900" y="42" text-anchor="middle" class="title">&#x0421;&#x442;&#x440;&#x443;&#x43a;&#x442;&#x443;&#x440;&#x430; &#x0411;&#x0414; &#x43f;&#x43b;&#x430;&#x442;&#x444;&#x43e;&#x440;&#x43c;&#x44b; (PostgreSQL)</text>
+  <text x="900" y="64" text-anchor="middle" class="subtitle">&#x412;&#x441;&#x435; &#x442;&#x430;&#x431;&#x43b;&#x438;&#x446;&#x44b; &#x43f;&#x43e; &#x43c;&#x43e;&#x434;&#x435;&#x43b;&#x44f;&#x43c; SQLAlchemy &#x2014; backend/app/models</text>
+
+  <!-- universities -->
+  <g id="tbl-universities">
+    <rect x="40" y="90" width="300" height="130" rx="6" class="box"/>
+    <rect x="40" y="90" width="300" height="28" rx="6" class="box-h"/>
+    <rect x="40" y="110" width="300" height="10" fill="#37474f"/>
+    <text x="190" y="109" text-anchor="middle" class="hdr">universities</text>
+    <text x="52" y="138" class="pk">id</text><text x="120" y="138" class="fld">PK int autoincrement</text>
+    <text x="52" y="156" class="fld">name, short_name, is_active</text>
+  </g>
+
+  <!-- approval_stage_definitions -->
+  <g id="tbl-approval_stage_definitions">
+    <rect x="380" y="90" width="360" height="170" rx="6" class="box"/>
+    <rect x="380" y="90" width="360" height="28" rx="6" class="box-h"/>
+    <rect x="380" y="110" width="360" height="10" fill="#37474f"/>
+    <text x="560" y="109" text-anchor="middle" class="hdr">approval_stage_definitions</text>
+    <text x="392" y="138" class="pk">id</text><text x="430" y="138" class="fld">PK int</text>
+    <text x="392" y="156" class="fld">code (unique), title, stage_order (unique)</text>
+    <text x="392" y="174" class="fld">allowed_roles JSONB, is_active</text>
+  </g>
+
+  <!-- users -->
+  <g id="tbl-users">
+    <rect x="40" y="280" width="340" height="320" rx="6" class="box"/>
+    <rect x="40" y="280" width="340" height="28" rx="6" class="box-h"/>
+    <rect x="40" y="300" width="340" height="10" fill="#37474f"/>
+    <text x="210" y="299" text-anchor="middle" class="hdr">users</text>
+    <text x="52" y="328" class="pk">id</text><text x="120" y="328" class="fld">PK UUID</text>
+    <text x="52" y="346" class="fk">university_id</text><text x="150" y="346" class="fld">-&gt; universities.id</text>
+    <text x="52" y="364" class="fld">email unique, hashed_password</text>
+    <text x="52" y="382" class="fld">full_name, role, wallet_address</text>
+    <text x="52" y="400" class="fld">wallet_encrypted_private_key Text</text>
+    <text x="52" y="418" class="fld">is_active, created_at, updated_at</text>
+  </g>
+
+  <!-- digital_objects -->
+  <g id="tbl-digital_objects">
+    <rect x="420" y="300" width="560" height="560" rx="6" class="box"/>
+    <rect x="420" y="300" width="560" height="28" rx="6" class="box-h"/>
+    <rect x="420" y="320" width="560" height="10" fill="#37474f"/>
+    <text x="700" y="319" text-anchor="middle" class="hdr">digital_objects</text>
+    <text x="432" y="348" class="pk">id</text><text x="470" y="348" class="fld">PK UUID</text>
+    <text x="432" y="366" class="fk">owner_id</text><text x="500" y="366" class="fld">-&gt; users.id</text>
+    <text x="432" y="384" class="fk">uploaded_by_id</text><text x="540" y="384" class="fld">-&gt; users.id nullable</text>
+    <text x="432" y="402" class="fld">file_name, title, mime_type, size_bytes</text>
+    <text x="432" y="420" class="fld">storage_key, storage_backend local|minio</text>
+    <text x="432" y="438" class="fld">sha256_hash, description, document_type</text>
+    <text x="432" y="456" class="fld">visibility, owner_wallet_address</text>
+    <text x="432" y="474" class="fld">blockchain_object_id, blockchain_tx_hash</text>
+    <text x="432" y="492" class="fld">blockchain_registered_at, status</text>
+    <text x="432" y="510" class="fld">processing_stage, stage_history JSONB</text>
+    <text x="432" y="528" class="fld">department_approved_at, deanery_approved_at</text>
+    <text x="432" y="546" class="fld">ai_check_status, student_wallet_address</text>
+    <text x="432" y="564" class="fld">created_at</text>
+  </g>
+
+  <!-- document_events -->
+  <g id="tbl-document_events">
+    <rect x="1040" y="90" width="420" height="200" rx="6" class="box"/>
+    <rect x="1040" y="90" width="420" height="28" rx="6" class="box-h"/>
+    <rect x="1040" y="110" width="420" height="10" fill="#37474f"/>
+    <text x="1250" y="109" text-anchor="middle" class="hdr">document_events</text>
+    <text x="1052" y="138" class="pk">id</text><text x="1090" y="138" class="fld">PK UUID</text>
+    <text x="1052" y="156" class="fk">document_id</text><text x="1140" y="156" class="fld">-&gt; digital_objects.id</text>
+    <text x="1052" y="174" class="fk">user_id</text><text x="1120" y="174" class="fld">-&gt; users.id</text>
+    <text x="1052" y="192" class="fld">action, timestamp</text>
+    <text x="1052" y="210" class="fld">metadata (JSONB, &#x438;&#x43c;&#x44f; &#x43a;&#x43e;&#x43b;&#x43e;&#x43d;&#x43a;&#x438; &#x432; &#x0411;&#x0414;)</text>
+  </g>
+
+  <!-- verification_logs -->
+  <g id="tbl-verification_logs">
+    <rect x="1040" y="320" width="420" height="220" rx="6" class="box"/>
+    <rect x="1040" y="320" width="420" height="28" rx="6" class="box-h"/>
+    <rect x="1040" y="340" width="420" height="10" fill="#37474f"/>
+    <text x="1250" y="339" text-anchor="middle" class="hdr">verification_logs</text>
+    <text x="1052" y="368" class="pk">id</text><text x="1090" y="368" class="fld">PK UUID</text>
+    <text x="1052" y="386" class="fk">digital_object_id</text><text x="1180" y="386" class="fld">-&gt; digital_objects</text>
+    <text x="1052" y="404" class="fk">requested_by_id</text><text x="1160" y="404" class="fld">-&gt; users.id</text>
+    <text x="1052" y="422" class="fld">requested_at, sha256_hash, is_verified</text>
+    <text x="1052" y="440" class="fld">blockchain_tx_hash, notes</text>
+  </g>
+
+  <!-- blockchain_events -->
+  <g id="tbl-blockchain_events">
+    <rect x="1040" y="580" width="420" height="240" rx="6" class="box"/>
+    <rect x="1040" y="580" width="420" height="28" rx="6" class="box-h"/>
+    <rect x="1040" y="600" width="420" height="10" fill="#37474f"/>
+    <text x="1250" y="599" text-anchor="middle" class="hdr">blockchain_events</text>
+    <text x="1052" y="628" class="pk">id</text><text x="1090" y="628" class="fld">PK UUID</text>
+    <text x="1052" y="646" class="fk">document_id</text><text x="1140" y="646" class="fld">-&gt; digital_objects.id</text>
+    <text x="1052" y="664" class="fk">initiator_user_id</text><text x="1180" y="664" class="fld">-&gt; users.id</text>
+    <text x="1052" y="682" class="fld">action_type, timestamp, tx_hash</text>
+    <text x="1052" y="700" class="fld">from_wallet, to_wallet</text>
+  </g>
+
+  <!-- approval_actions -->
+  <g id="tbl-approval_actions">
+    <rect x="40" y="920" width="700" height="260" rx="6" class="box"/>
+    <rect x="40" y="920" width="700" height="28" rx="6" class="box-h"/>
+    <rect x="40" y="940" width="700" height="10" fill="#37474f"/>
+    <text x="390" y="939" text-anchor="middle" class="hdr">approval_actions</text>
+    <text x="52" y="968" class="pk">id</text><text x="90" y="968" class="fld">PK UUID</text>
+    <text x="52" y="986" class="fk">document_id</text><text x="140" y="986" class="fld">-&gt; digital_objects.id CASCADE</text>
+    <text x="52" y="1004" class="fk">stage_definition_id</text><text x="190" y="1004" class="fld">-&gt; approval_stage_definitions RESTRICT</text>
+    <text x="52" y="1022" class="fk">actor_user_id</text><text x="150" y="1022" class="fld">-&gt; users.id</text>
+    <text x="52" y="1040" class="fld">action APPROVE REJECT, comment</text>
+    <text x="52" y="1058" class="fld">metadata JSONB, created_at</text>
+  </g>
+
+  <!-- connectors -->
+  <path class="line" d="M 190 220 L 190 278"/>
+  <path class="line" d="M 380 440 L 418 440"/>
+  <path class="line" d="M 380 500 L 418 500"/>
+  <path class="line" d="M 980 190 L 1038 190"/>
+  <path class="line" d="M 980 430 L 1038 430"/>
+  <path class="line" d="M 980 700 L 1038 700"/>
+  <path class="line" d="M 700 858 L 700 918"/>
+  <path class="line" d="M 560 260 L 600 260 L 600 968 L 698 968"/>
+
+  <text x="900" y="1230" text-anchor="middle" class="subtitle">&#x421;&#x438;&#x43d;&#x438;&#x439; &#x2014; &#x43f;&#x435;&#x440;&#x432;&#x438;&#x447;&#x43d;&#x44b;&#x439; &#x43a;&#x43b;&#x44e;&#x447; (PK), &#x43a;&#x440;&#x430;&#x441;&#x43d;&#x44b;&#x439; &#x2014; &#x432;&#x43d;&#x435;&#x448;&#x43d;&#x438;&#x439; &#x43a;&#x43b;&#x44e;&#x447; (FK). &#x41b;&#x438;&#x43d;&#x438;&#x438; &#x43f;&#x43e;&#x43a;&#x430;&#x437;&#x44b;&#x432;&#x430;&#x44e;&#x442; &#x43e;&#x441;&#x43d;&#x43e;&#x432;&#x43d;&#x44b;&#x435; &#x441;&#x432;&#x44f;&#x437;&#x438;.</text>
+  <text x="900" y="2280" text-anchor="middle" class="subtitle">&#x424;&#x430;&#x439;&#x43b;: docs/database-schema-full.svg &#x2014; &#x43e;&#x442;&#x43a;&#x440;&#x44b;&#x442;&#x44c; &#x432; &#x431;&#x440;&#x430;&#x443;&#x437;&#x435;&#x440;&#x435; &#x438;&#x43b;&#x438; &#x432;&#x441;&#x442;&#x430;&#x432;&#x438;&#x442;&#x44c; &#x432; &#x43f;&#x440;&#x435;&#x437;&#x435;&#x43d;&#x442;&#x430;&#x446;&#x438;&#x44e;</text>
+</svg>

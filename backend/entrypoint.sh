@@ -20,4 +20,7 @@ if [ "$ok" -ne 1 ]; then
   exit 1
 fi
 
+# Дефолтный администратор для пустой БД: admin@example.com / admin
+python -m app.scripts.create_admin || true
+
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

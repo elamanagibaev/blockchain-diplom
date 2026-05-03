@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   FileText,
   Globe,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,8 +15,8 @@ import {
   Settings,
   ShieldCheck,
   Sun,
-  Upload,
   User,
+  Users,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -58,7 +59,8 @@ export const Layout: React.FC = () => {
   const navItems = useMemo((): NavItem[] => {
     const items: NavItem[] = [{ title: "Панель", path: "/dashboard", icon: LayoutDashboard }];
     if (user?.role === "department") {
-      items.push({ title: "Загрузка", path: "/upload", icon: Upload });
+      items.push({ title: "Пользователи", path: "/department/users", icon: Users });
+      items.push({ title: "Оценки", path: "/department/grades", icon: GraduationCap });
     }
     items.push(
       { title: "Мои документы", path: "/files", icon: FileText },

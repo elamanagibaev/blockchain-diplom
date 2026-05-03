@@ -51,31 +51,9 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Упрощённая модель: загрузку диплома выполняет только кафедра (роль department).
-    if current_user.role != "department":
-        raise HTTPException(
-            status_code=403,
-            detail="Загрузка документа доступна только роли department (кафедра).",
-        )
-    desc = (description or "").strip()
-    if not desc:
-        raise HTTPException(status_code=422, detail="Введите название документа")
-    if not (student_wallet or "").strip():
-        raise HTTPException(status_code=422, detail="Укажите student_wallet (кошелёк выпускника)")
-    obj = FileService(db).register_file(current_user, upload_file, desc, student_wallet=student_wallet)
-    return DigitalObjectCreateResponse(
-        id=obj.id,
-        file_name=obj.file_name,
-        mime_type=obj.mime_type,
-        size_bytes=obj.size_bytes,
-        description=obj.description,
-        sha256_hash=obj.sha256_hash,
-        status=obj.status,
-        created_at=obj.created_at,
-        blockchain_object_id=obj.blockchain_object_id,
-        blockchain_tx_hash=obj.blockchain_tx_hash,
-        student_wallet_address=getattr(obj, "student_wallet_address", None),
-        tx_explorer_url=make_tx_explorer_url(getattr(obj, "blockchain_tx_hash", None)),
+    raise HTTPException(
+        status_code=403,
+        detail="Ручная загрузка диплома отключена. Используйте выпуск студента через /department/students/{student_id}/graduate.",
     )
 
 

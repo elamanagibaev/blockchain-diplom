@@ -12,6 +12,8 @@ export const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"department" | "dean">("department");
+  const [registrationCode, setRegistrationCode] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
@@ -42,12 +44,18 @@ export const RegisterPage: React.FC = () => {
       setError("Пароль должен содержать хотя бы одну цифру");
       return;
     }
+    if (!/^\d{5}$/.test(registrationCode.trim())) {
+      setError("Код университета должен состоять из 5 цифр");
+      return;
+    }
 
     try {
       await api.post("/auth/register", {
         email,
         full_name: fullName || null,
         password,
+        role,
+        registration_code: registrationCode.trim(),
       });
       notify("success", "Аккаунт создан. Войдите в систему.");
       navigate("/login");
@@ -63,10 +71,25 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout title="Регистрация" subtitle="Создайте аккаунт для загрузки и верификации документов">
+    <AuthLayout title="Регистрация" subtitle="Регистрация для кафедры и деканата по коду университета">
       <form onSubmit={submit} className="stack">
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Роль</span>
+          <select value={role} onChange={(e) => setRole(e.target.value as "department" | "dean")} className="input">
+            <option value="department">Кафедра</option>
+            <option value="dean">Деканат</option>
+          </select>
+        </label>
         <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@university.ru" autoComplete="email" />
         <Input label="ФИО (опционально)" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Иванов И.И." />
+        {(role === "department" || role === "dean") && (
+          <Input
+            label="Код университета"
+            value={registrationCode}
+            onChange={(e) => setRegistrationCode(e.target.value)}
+            placeholder="12345"
+          />
+        )}
         <Input
           label="Пароль (мин. 8 символов, буквы разного регистра и цифра)"
           type="password"

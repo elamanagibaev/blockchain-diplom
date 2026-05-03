@@ -21,6 +21,8 @@ class MeResponse(BaseModel):
     created_at: datetime
     university_id: int | None = None
     university_name: str | None = None
+    enrollment_year: int | None = None
+    major: str | None = None
 
 
 class WalletProfileLookup(BaseModel):

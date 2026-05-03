@@ -20,6 +20,8 @@ class User(Base):
     wallet_encrypted_private_key = Column(Text, nullable=True)  # custodial demo storage
     is_active = Column(Boolean, default=True, nullable=False)
     university_id = Column(Integer, ForeignKey("universities.id"), nullable=True)
+    enrollment_year = Column(Integer, nullable=True)
+    major = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

@@ -12,7 +12,7 @@ from app.models.document_event import DocumentEvent
 from app.models.university import University
 from app.models.user import User
 from app.schemas.files import DigitalObjectRead, DocumentEventJournalRead
-from app.schemas.university import UniversityCreate, UniversityRead
+from app.schemas.university import UniversityCodeUpdate, UniversityCreate, UniversityRead
 from app.schemas.user import UserRead
 from app.constants.document_events import DocumentEventAction
 from app.constants.lifecycle import LifecycleStatus
@@ -264,8 +264,39 @@ def create_university(
     if exists:
         raise HTTPException(status_code=409, detail="Вуз с таким названием уже существует")
     short = (body.short_name or "").strip() or None
-    u = University(name=name, short_name=short, is_active=True)
+    code = body.registration_code.strip()
+    if not (len(code) == 5 and code.isdigit()):
+        raise HTTPException(status_code=422, detail="Код университета должен состоять из 5 цифр")
+    code_exists = db.query(University).filter(University.registration_code == code).first()
+    if code_exists:
+        raise HTTPException(status_code=409, detail="Код уже используется другим университетом")
+    u = University(name=name, short_name=short, registration_code=code, is_active=True)
     db.add(u)
     db.commit()
     db.refresh(u)
     return u
+
+
+@router.patch("/universities/{id}/code", response_model=UniversityRead)
+def update_university_code(
+    id: int,
+    body: UniversityCodeUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    university = db.query(University).filter(University.id == id).first()
+    if not university:
+        raise HTTPException(status_code=404, detail="Университет не найден")
+    code = body.registration_code.strip()
+    if not code:
+        raise HTTPException(status_code=422, detail="Укажите registration_code")
+    if not (len(code) == 5 and code.isdigit()):
+        raise HTTPException(status_code=422, detail="Код университета должен состоять из 5 цифр")
+    exists = db.query(University).filter(University.registration_code == code, University.id != id).first()
+    if exists:
+        raise HTTPException(status_code=409, detail="Код уже используется другим университетом")
+    university.registration_code = code
+    db.add(university)
+    db.commit()
+    db.refresh(university)
+    return university

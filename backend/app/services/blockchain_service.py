@@ -145,3 +145,11 @@ class BlockchainService:
         client = self._client()
         return client.get_actions(object_id)
 
+    def append_action(self, object_id: str, action_type: str, actor_wallet: str, details: str) -> str:
+        wallet = _normalize_owner_wallet(actor_wallet)
+        client = self._client()
+        try:
+            return client.append_action(str(object_id), action_type, wallet, details)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Ошибка appendAction: {str(e)}")
+

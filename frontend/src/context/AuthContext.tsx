@@ -5,13 +5,15 @@ export type User = {
   id: string;
   email: string;
   full_name?: string | null;
-  role: "user" | "admin" | string;
+  role: "student" | "department" | "dean" | "admin" | string;
   wallet_address?: string | null;
   wallet_status?: string;
   document_count?: number;
   on_chain_count?: number;
   university_id?: number | null;
   university_name?: string | null;
+  enrollment_year?: number | null;
+  major?: string | null;
 };
 
 type AuthContextType = {
@@ -46,8 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
     const data = new URLSearchParams();
-    data.append("username", email);
+    data.append("username", normalizedEmail);
     data.append("password", password);
     const res = await api.post("/auth/login", data, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
