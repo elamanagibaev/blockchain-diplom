@@ -4,6 +4,7 @@ import re
 import os
 import secrets
 import string
+import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from uuid import UUID
@@ -14,7 +15,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.barcode import qr
+from reportlab.graphics import renderPDF
 from reportlab.lib.styles import getSampleStyleSheet
 from sqlalchemy.orm import Session, joinedload
 
@@ -35,6 +39,7 @@ from app.utils.hashing import sha256_file
 from app.utils.wallet import encrypt_private_key, generate_evm_wallet
 
 settings = get_settings()
+
 
 
 class StudentService:
@@ -194,7 +199,7 @@ class StudentService:
         self._assert_department(department_user)
         return (
             self.db.query(User)
-            .filter(User.role == "student", User.university_id == department_user.university_id)
+            .filter(User.role == "student", User.university_id == department_user.university_id, User.is_active.is_(True))
             .order_by(User.created_at.desc())
             .all()
         )
@@ -281,33 +286,48 @@ class StudentService:
         )
         return progress
 
-    def _find_cyrillic_font(self) -> str | None:
-        candidates = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            "C:/Windows/Fonts/DejaVuSans.ttf",
-            "C:/Windows/Fonts/Arial.ttf",
+    def _find_cyrillic_fonts(self) -> tuple[str | None, str | None]:
+        pairs = [
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+            ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+            ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
         ]
-        for path in candidates:
-            if os.path.exists(path):
-                return path
-        return None
+        for regular, bold in pairs:
+            if os.path.exists(regular):
+                return regular, (bold if os.path.exists(bold) else None)
+        return None, None
 
-    def _build_diploma_pdf(self, student: User, university_name: str, grades: list[StudentGrade]) -> bytes:
+    def _draw_qr_bottom_right(self, canv, verify_url: str) -> None:
+        qr_widget = qr.QrCodeWidget(verify_url)
+        size = 28 * mm
+        bounds = qr_widget.getBounds()
+        w = bounds[2] - bounds[0]
+        h = bounds[3] - bounds[1]
+        drawing = Drawing(size, size, transform=[size / w, 0, 0, size / h, 0, 0])
+        drawing.add(qr_widget)
+        x = A4[0] - (20 * mm) - size
+        y = 20 * mm
+        renderPDF.draw(drawing, canv, x, y)
+
+    def _build_diploma_pdf(self, student: User, university_name: str, grades: list[StudentGrade], verify_url: str | None = None) -> bytes:
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=20 * mm, bottomMargin=20 * mm)
         styles = getSampleStyleSheet()
-        font_path = self._find_cyrillic_font()
-        if font_path is not None:
+        regular_font, bold_font = self._find_cyrillic_fonts()
+        table_font = "Helvetica"
+        table_font_bold = "Helvetica-Bold"
+        if regular_font is not None:
             try:
-                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-                bold_font_path = font_path.replace("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
-                if os.path.exists(bold_font_path):
-                    pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_font_path))
-                for key in ("Normal",):
-                    styles[key].fontName = "DejaVuSans"
-                for key in ("Heading1", "Heading2"):
-                    styles[key].fontName = "DejaVuSans-Bold"
+                pdfmetrics.registerFont(TTFont("DiplomaSans", regular_font))
+                table_font = "DiplomaSans"
+                table_font_bold = "DiplomaSans"
+                if bold_font is not None:
+                    pdfmetrics.registerFont(TTFont("DiplomaSans-Bold", bold_font))
+                    table_font_bold = "DiplomaSans-Bold"
+                styles["Normal"].fontName = table_font
+                styles["Heading1"].fontName = table_font_bold
+                styles["Heading2"].fontName = table_font_bold
             except Exception:
                 pass
 
@@ -338,27 +358,38 @@ class StudentService:
                     ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                     ("ALIGN", (1, 1), (1, -1), "CENTER"),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("FONTNAME", (0, 0), (-1, 0), table_font_bold),
+                    ("FONTNAME", (0, 1), (-1, -1), table_font),
                 ]
             )
         )
         story.append(table)
-        doc.build(story)
+        if verify_url:
+            doc.build(story, onFirstPage=lambda canv, _: self._draw_qr_bottom_right(canv, verify_url))
+        else:
+            doc.build(story)
         return buffer.getvalue()
 
-    def _create_digital_object_from_pdf(self, department_user: User, student: User, pdf_bytes: bytes) -> DigitalObject:
+    def _create_digital_object_from_pdf(self, department_user: User, student: User, pdf_bytes: bytes, obj_id: UUID | None = None) -> DigitalObject:
         file_name = f"diploma_{student.id}.pdf"
         sha = sha256_file(BytesIO(pdf_bytes))
         existing = self.db.query(DigitalObject).filter(DigitalObject.sha256_hash == sha).first()
         if existing:
+            # Идемпотентность повторной выдачи: если это тот же студент и автогенерированный диплом,
+            # используем существующую запись вместо ошибки.
+            if existing.owner_id == student.id and (existing.description or "").startswith("Автоматически сгенерированный диплом"):
+                return existing
             raise HTTPException(status_code=400, detail="Диплом с таким хэшем уже существует")
 
         storage = LocalStorageBackend()
         storage_key = storage.save(BytesIO(pdf_bytes), file_name)
+        doc_id = obj_id or uuid.uuid4()
         obj = DigitalObject(
+            id=doc_id,
             owner_id=student.id,
             uploaded_by_id=department_user.id,
             file_name=file_name,
-            title=f"Диплом {student.full_name or ''}".strip(),
+            title=f"{(student.full_name or 'Выпускник').strip()} {student.enrollment_year or '—'} год {(student.major or '—').strip()}".strip(),
             mime_type="application/pdf",
             size_bytes=len(pdf_bytes),
             storage_key=storage_key,
@@ -406,14 +437,6 @@ class StudentService:
         if any(g.grade is None for g in fourth_year_grades):
             raise HTTPException(status_code=400, detail="Сначала заполните все оценки 4 курса")
 
-        for g in fourth_year_grades:
-            g.locked = True
-            self.db.add(g)
-        progress.graduated = True
-        self.db.add(progress)
-        self.db.commit()
-        self.db.refresh(progress)
-
         university_name = student.university.name if student.university else "Университет"
         all_grades = (
             self.db.query(StudentGrade)
@@ -421,13 +444,23 @@ class StudentService:
             .order_by(StudentGrade.course_year.asc(), StudentGrade.subject.asc())
             .all()
         )
-        pdf_bytes = self._build_diploma_pdf(student, university_name, all_grades)
-        diploma = self._create_digital_object_from_pdf(department_user, student, pdf_bytes)
-        diploma = FileService(self.db).submit_for_registration(department_user, diploma.id)
+        diploma_id = uuid.uuid4()
+        verify_url = f"{settings.PUBLIC_VERIFY_BASE_URL.rstrip('/')}/verify/doc/{diploma_id}"
+        pdf_bytes = self._build_diploma_pdf(student, university_name, all_grades, verify_url=verify_url)
+        diploma = self._create_digital_object_from_pdf(department_user, student, pdf_bytes, obj_id=diploma_id)
+        if diploma.status in (LifecycleStatus.FROZEN.value, LifecycleStatus.REJECTED.value):
+            diploma = FileService(self.db).submit_for_registration(department_user, diploma.id)
         self._append_chain_action(
             action_type="DIPLOMA_ISSUED",
             actor=department_user,
             details=f"{student.full_name}; diploma_id={diploma.id}",
             object_id=student.id,
         )
+        for g in fourth_year_grades:
+            g.locked = True
+            self.db.add(g)
+        progress.graduated = True
+        self.db.add(progress)
+        self.db.commit()
+        self.db.refresh(progress)
         return progress, diploma

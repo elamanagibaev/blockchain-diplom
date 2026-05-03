@@ -366,7 +366,6 @@ export const AdminPage: React.FC = () => {
               <table className="w-full" style={{ width: "100%", minWidth: 1200 }}>
                 <thead>
                   <tr>
-                    <th>ID</th>
                     <th>ФИО</th>
                     <th>Email</th>
                     <th>Роль</th>
@@ -380,35 +379,38 @@ export const AdminPage: React.FC = () => {
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="muted">
+                      <td colSpan={8} className="muted">
                         Пользователей пока нет
                       </td>
                     </tr>
-                  ) : users.map((u) => (
+                  ) : users.map((u) => {
+                        const isProtectedAdmin = u.role === "admin";
+                        return (
                         <tr key={u.id}>
-                          <td>{u.id}</td>
                           <td>{u.full_name || "—"}</td>
                           <td>{u.email}</td>
-                          <td>
+                          <td style={{ textAlign: "center" }}>
                             <select
                               value={u.role}
                               onChange={(e) => updateRole(u.id, e.target.value)}
+                              disabled={isProtectedAdmin}
                               className="input"
                               style={{ maxWidth: 160, fontSize: 13, padding: "6px 8px" }}
                             >
-                              <option value="user">Студент</option>
+                              <option value="student">Студент</option>
                               <option value="department">Кафедра</option>
                               <option value="dean">Деканат</option>
                               <option value="registrar">Регистратор</option>
                               <option value="admin">Администратор</option>
                             </select>
                           </td>
-                          <td>
+                          <td style={{ textAlign: "center" }}>
                             <select
                               className="input"
                               style={{ maxWidth: 220, fontSize: 13, padding: "6px 8px" }}
                               value={u.university_id != null && u.university_id !== undefined ? String(u.university_id) : ""}
                               onChange={(e) => updateUniversity(u.id, e.target.value)}
+                              disabled={isProtectedAdmin}
                             >
                               <option value="">—</option>
                               {universities.map((uni) => (
@@ -420,16 +422,17 @@ export const AdminPage: React.FC = () => {
                           </td>
                           <td>{u.enrollment_year ?? "—"}</td>
                           <td>{u.major || "—"}</td>
-                          <td>
+                          <td style={{ textAlign: "center" }}>
                             {u.is_active ? <span className="ok">Активен</span> : <span className="muted">Неактивен</span>}
                           </td>
-                          <td>
-                            <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)}>
-                              Удалить
+                          <td style={{ textAlign: "center" }}>
+                            <button type="button" className="btn btn-sm btn-danger" style={{ margin: "0 auto", display: "inline-flex", justifyContent: "center", alignItems: "center" }} onClick={() => deleteUser(u.id)} disabled={isProtectedAdmin}>
+                              {isProtectedAdmin ? "Защищён" : "Удалить"}
                             </button>
                           </td>
                         </tr>
-                    ))}
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

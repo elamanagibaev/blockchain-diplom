@@ -82,25 +82,29 @@ const ACTION_LABELS: Record<string, string> = {
   VERIFY_FAILED: "Проверка не пройдена",
 };
 
-function formatEventAction(action: string): string {
-  return ACTION_LABELS[action] || action.replace(/_/g, " ");
+function formatEventAction(action: string, meta: Record<string, unknown> | null): string {
+  const base = ACTION_LABELS[action] || action.replace(/_/g, " ");
+  const step = typeof meta?.step === "string" ? meta.step : "";
+  const decision = typeof meta?.decision === "string" ? meta.decision : "";
+
+  if (action === "UPLOAD") return "Документ загружен в систему";
+  if (action === "FREEZE") return "Зафиксирован SHA-256 хэш документа";
+  if (action === "REGISTER") return "Документ зарегистрирован в блокчейне";
+  if (action === "APPROVAL") {
+    if (step === "submit_for_review") return "Кафедра отправила документ на согласование";
+    if (step === "department_approved") return "Этап кафедры подтверждён";
+    if (step === "dean_approved") return "Этап деканата подтверждён";
+    if (step === "owner_assigned") return "Документ закреплён за выпускником";
+    if (step === "on_chain_registered") return "Выполнена on-chain регистрация документа";
+    if (decision === "approved") return "Этап согласования подтверждён";
+    if (decision === "rejected") return "Этап согласования отклонён";
+  }
+  return base;
 }
 
 function hashShort(h: string): string {
   if (!h || h.length < 20) return h;
   return `${h.slice(0, 10)}…${h.slice(-8)}`;
-}
-
-function eventSummary(meta: Record<string, unknown> | null): string {
-  if (!meta) return "—";
-  const step = typeof meta.step === "string" ? meta.step : null;
-  const decision = typeof meta.decision === "string" ? meta.decision : null;
-  const tx = typeof meta.tx_hash === "string" ? meta.tx_hash : null;
-  if (step && tx) return `${step} · ${tx.slice(0, 12)}…`;
-  if (step && decision) return `${step} · ${decision}`;
-  if (step) return step;
-  if (tx) return `tx ${tx.slice(0, 12)}…`;
-  return "подробности в JSON";
 }
 
 export const FileDetailPage: React.FC = () => {
@@ -625,8 +629,8 @@ export const FileDetailPage: React.FC = () => {
             </div>
           </div>
           <div className="file-detail-meta-item">
-            <div className="label">SHA-256 (фрагмент)</div>
-            <code title={data.sha256_hash}>{hashShort(data.sha256_hash)}</code>
+            <div className="label">SHA-256</div>
+            <code title={data.sha256_hash}>{data.sha256_hash}</code>
           </div>
           <div className="file-detail-meta-item">
             <div className="label">Создан</div>
@@ -785,7 +789,6 @@ export const FileDetailPage: React.FC = () => {
                         <th>Этап</th>
                         <th>Статус</th>
                         <th>Когда</th>
-                        <th>Комментарий</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -794,7 +797,6 @@ export const FileDetailPage: React.FC = () => {
                           <td>{stage.title}</td>
                           <td>{stageStateLabel(stage.state)}</td>
                           <td>{stage.acted_at ? new Date(stage.acted_at).toLocaleString() : "—"}</td>
-                          <td>{stage.comment || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -823,44 +825,15 @@ export const FileDetailPage: React.FC = () => {
                   <thead>
                     <tr>
                       <th>Время</th>
-                      <th>Событие</th>
-                      <th>Детали</th>
+                      <th style={{ textAlign: "center" }}>Событие</th>
                     </tr>
                   </thead>
                   <tbody>
                     {events.map((ev) => (
                       <tr key={ev.id}>
                         <td style={{ whiteSpace: "nowrap" }}>{new Date(ev.timestamp).toLocaleString()}</td>
-                        <td>{formatEventAction(ev.action)}</td>
-                        <td>
-                          <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-                            {eventSummary(ev.metadata)}
-                          </div>
-                          {ev.metadata ? (
-                            <details>
-                              <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
-                                JSON
-                              </summary>
-                              <pre
-                                style={{
-                                  marginTop: 6,
-                                  padding: 8,
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 6,
-                                  maxWidth: 460,
-                                  maxHeight: 180,
-                                  overflow: "auto",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  fontSize: 11,
-                                }}
-                              >
-                                {JSON.stringify(ev.metadata, null, 2)}
-                              </pre>
-                            </details>
-                          ) : (
-                            <code style={{ fontSize: 11 }}>—</code>
-                          )}
+                        <td style={{ textAlign: "center", verticalAlign: "middle", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.35 }}>
+                          {formatEventAction(ev.action, ev.metadata)}
                         </td>
                       </tr>
                     ))}

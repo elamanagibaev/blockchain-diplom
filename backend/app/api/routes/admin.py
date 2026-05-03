@@ -3,6 +3,7 @@ from uuid import UUID
 from typing import List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
@@ -230,6 +231,8 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="Учётную запись администратора нельзя изменять")
     updates = payload.model_dump(exclude_unset=True)
     if "is_active" in updates:
         user.is_active = updates["is_active"]
@@ -242,6 +245,32 @@ def update_user(
     user = db.query(User).options(joinedload(User.university)).filter(User.id == user_id).first()
     return UserRead.from_orm(user)
 
+
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить собственную учётную запись")
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="Учётную запись администратора нельзя удалять")
+    try:
+        db.delete(user)
+        db.commit()
+        return {"message": "Пользователь удалён"}
+    except IntegrityError:
+        db.rollback()
+        user.is_active = False
+        db.add(user)
+        db.commit()
+        return {"message": "Пользователь деактивирован (связанные записи не позволяют полное удаление)"}
 
 @router.get("/universities", response_model=List[UniversityRead])
 def list_universities(

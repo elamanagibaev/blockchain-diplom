@@ -45,6 +45,7 @@ def create_student(
         full_name=body.full_name,
         enrollment_year=body.enrollment_year,
         major=body.major,
+        password=body.password,
     )
     return DepartmentStudentCreateResponse(student=_student_read(student), generated_password=generated_password)
 

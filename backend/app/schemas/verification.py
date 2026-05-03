@@ -48,6 +48,13 @@ class PublicVerifyDocumentResponse(BaseModel):
     owner_email: str | None = None
     owner_wallet_address: str | None = None
     registration_timestamp: datetime | None = None
+    sha256_hash: str
     hash_short: str
     verify_url: str
     is_authentic: bool = Field(description="True если REGISTERED_ON_CHAIN и есть tx")
+    tx_hash: str | None = None
+    tx_explorer_url: str | None = None
+    file_name: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    file_preview_url: str | None = None

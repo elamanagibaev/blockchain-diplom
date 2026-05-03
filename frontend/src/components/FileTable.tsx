@@ -28,10 +28,10 @@ export function canSubmitForRegistration(status: string, hasTx: boolean): boolea
 }
 
 function documentDisplayName(f: FileRow): string {
-  const d = f.description?.trim();
-  if (d) return d;
   const t = f.title?.trim();
   if (t) return t;
+  const d = f.description?.trim();
+  if (d) return d;
   return f.file_name;
 }
 

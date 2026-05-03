@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db, get_optional_user
@@ -14,6 +15,7 @@ from app.services.pipeline_service import PipelineService
 from app.utils.block_explorer import make_tx_explorer_url
 from app.services.verification_service import VerificationService
 from app.utils.sanitizer import sanitize_hash
+from app.services.file_service import _storage_for_obj
 
 router = APIRouter(prefix="/verify", tags=["verification"])
 settings = get_settings()
@@ -168,7 +170,38 @@ def verify_document_public(
         owner_email=obj.owner.email if obj.owner else None,
         owner_wallet_address=wallet,
         registration_timestamp=obj.blockchain_registered_at or obj.created_at,
+        sha256_hash=h,
         hash_short=hash_short,
         verify_url=verify_url,
         is_authentic=authentic,
+        tx_hash=obj.blockchain_tx_hash,
+        tx_explorer_url=make_tx_explorer_url(obj.blockchain_tx_hash),
+        file_name=obj.file_name,
+        mime_type=obj.mime_type,
+        size_bytes=obj.size_bytes,
+        file_preview_url=f"{settings.API_V1_STR}/verify/{document_id}/file",
+    )
+
+
+@router.get("/{document_id}/file")
+def verify_document_public_file(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+):
+    obj = db.query(DigitalObject).filter(DigitalObject.id == document_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not (is_ledger_registered_status(obj.status) and bool(obj.blockchain_tx_hash)):
+        raise HTTPException(status_code=403, detail="Public file preview is not available for this document")
+    try:
+        storage = _storage_for_obj(obj)
+        stream = storage.get_stream(obj.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found in storage")
+    filename = obj.file_name or f"{document_id}"
+    mime = obj.mime_type or "application/octet-stream"
+    return StreamingResponse(
+        stream,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
