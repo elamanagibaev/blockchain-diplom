@@ -17,4 +17,3 @@ loguru==0.7.2
 cryptography>=41.0.0
 eth-account>=0.10.0
 reportlab==4.2.2
-
