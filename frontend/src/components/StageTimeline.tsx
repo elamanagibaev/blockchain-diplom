@@ -22,7 +22,7 @@ function hashPreview(h: string): string {
 
 type StepKind = "done" | "active" | "pending" | "skipped";
 
-/** Нормализация статусов бэкенда к этапам 1–5 */
+/** Нормализация статусов бэкенда к этапам 1–4 */
 function deriveSteps(
   status: string,
   processingStage: number | null | undefined,
@@ -30,13 +30,11 @@ function deriveSteps(
   sha256Hash: string,
   departmentApprovedAt: string | null | undefined,
   deaneryApprovedAt: string | null | undefined,
-  aiCheckStatus: string | undefined,
   blockchainTxHash: string | null | undefined,
   studentWalletAddress: string | null | undefined
 ) {
   const st = status.toUpperCase();
   const hasChain = Boolean(blockchainTxHash);
-  const ai = (aiCheckStatus || "skipped").toLowerCase();
   const postDeanStatuses = [
     "DEAN_APPROVED",
     "APPROVED",
@@ -49,39 +47,32 @@ function deriveSteps(
   // Этап 1: фиксация
   const s1: StepKind = "done";
 
-  // Этап 2: ИИ
-  let s2: StepKind = "skipped";
-  if (ai === "pending") s2 = "active";
-  else if (ai === "passed") s2 = "done";
-  else s2 = "skipped";
-
-  // Этап 3: одно согласование деканатом (без отдельного этапа кафедры в workflow)
-  let s3: StepKind = "pending";
-  if (st === "UNDER_REVIEW" || st === "PENDING_APPROVAL") s3 = "active";
+  // Этап 2: одно согласование деканатом (без отдельного этапа кафедры в workflow)
+  let s2: StepKind = "pending";
+  if (st === "UNDER_REVIEW" || st === "PENDING_APPROVAL") s2 = "active";
   if (deaneryApprovedAt || postDeanStatuses.includes(st)) {
-    s3 = "done";
+    s2 = "done";
   }
-  if (st === "REJECTED") s3 = "active";
+  if (st === "REJECTED") s2 = "active";
 
-  // Этап 4: реестр (после деканата — автоматически)
+  // Этап 3: реестр (после деканата — автоматически)
+  let s3: StepKind = "pending";
+  if (hasChain) s3 = "done";
+  else if (st === "DEAN_APPROVED" || st === "APPROVED") s3 = "active";
+
+  // Этап 4: владелец (автоматически тем же кошельком, что при загрузке)
   let s4: StepKind = "pending";
-  if (hasChain) s4 = "done";
-  else if (st === "DEAN_APPROVED" || st === "APPROVED") s4 = "active";
-
-  // Этап 5: владелец (автоматически тем же кошельком, что при загрузке)
-  let s5: StepKind = "pending";
-  if (st === "ASSIGNED_TO_OWNER") s5 = "done";
-  else if (st === "TRANSFERRED" && hasChain) s5 = "done";
-  else if (hasChain && studentWalletAddress) s5 = "done";
-  else if (hasChain && (st === "REGISTERED" || st === "REGISTERED_ON_CHAIN")) s5 = "active";
+  if (st === "ASSIGNED_TO_OWNER") s4 = "done";
+  else if (st === "TRANSFERRED" && hasChain) s4 = "done";
+  else if (hasChain && studentWalletAddress) s4 = "done";
+  else if (hasChain && (st === "REGISTERED" || st === "REGISTERED_ON_CHAIN")) s4 = "active";
 
   // Полное завершение
   const allDone =
     s1 === "done" &&
-    (s2 === "done" || s2 === "skipped") &&
+    s2 === "done" &&
     s3 === "done" &&
-    s4 === "done" &&
-    s5 === "done";
+    s4 === "done";
   if (allDone) {
     /* оставляем как есть */
   }
@@ -101,28 +92,20 @@ function deriveSteps(
     },
     {
       n: 2,
-      title: "Проверка ИИ",
-      statusRu: ai === "skipped" ? "Скоро" : ai === "pending" ? "В работе" : ai === "passed" ? "Пройдена" : "Пропущено",
-      body: "Автоматический анализ документа (в разработке).",
-      kind: s2,
-      badge: ai === "skipped" ? "Скоро" : undefined,
-    },
-    {
-      n: 3,
       title: "Согласование деканата",
       statusRu:
-        s3 === "done"
+        s2 === "done"
           ? "Завершён"
-          : s3 === "active"
+          : s2 === "active"
             ? "Активен"
             : "Ожидание",
       body: deaneryApprovedAt
         ? `✓ Деканат: ${new Date(deaneryApprovedAt).toLocaleString("ru-RU")}`
         : "○ Деканат — проверка и подтверждение",
-      kind: s3,
+      kind: s2,
     },
     {
-      n: 4,
+      n: 3,
       title: "Регистрация в реестре",
       statusRu: hasChain
         ? "Завершено"
@@ -134,11 +117,10 @@ function deriveSteps(
         : deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED"
           ? "Автоматически после согласования деканата (запись хэша в смарт-контракт)."
           : "Запись в смарт-контракте после согласования деканата.",
-      kind: s4,
-      badge: deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED" ? "Авто" : undefined,
+      kind: s3,
     },
     {
-      n: 5,
+      n: 4,
       title: "Закрепление за владельцем",
       statusRu:
         st === "ASSIGNED_TO_OWNER" || (st === "TRANSFERRED" && hasChain)
@@ -151,12 +133,14 @@ function deriveSteps(
       body: studentWalletAddress
         ? `Кошелёк выпускника: ${studentWalletAddress.slice(0, 12)}…`
         : "Автоматическая привязка кошелька из данных загрузки и QR для публичной проверки.",
-      kind: s5,
-      badge: deaneryApprovedAt || st === "DEAN_APPROVED" || st === "APPROVED" ? "Авто" : undefined,
+      kind: s4,
     },
   ];
 
-  return { lines, sysHint: processingStage ?? "—" };
+  const visibleStage =
+    typeof processingStage === "number" && processingStage > 2 ? processingStage - 1 : processingStage;
+
+  return { lines, sysHint: visibleStage ?? "—" };
 }
 
 function dotContent(kind: StepKind, n: number): React.ReactNode {
@@ -173,7 +157,6 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
   sha256Hash,
   departmentApprovedAt,
   deaneryApprovedAt,
-  aiCheckStatus,
   blockchainTxHash,
   studentWalletAddress,
   compact,
@@ -186,7 +169,6 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
     sha256Hash,
     departmentApprovedAt,
     deaneryApprovedAt,
-    aiCheckStatus,
     blockchainTxHash,
     studentWalletAddress
   );
@@ -196,7 +178,7 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
       <div className="stage-timeline-v2__title">Этапы обработки документа</div>
       {!compact && (
         <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
-          Системный этап: {sysHint} / 5 · статус: {status}
+          Системный этап: {sysHint} / 4 · статус: {status}
         </p>
       )}
       <div>
@@ -204,7 +186,7 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
           <div
             key={step.n}
             className={`stage-step stage-step--${step.kind === "skipped" ? "skipped" : step.kind === "done" ? "done" : step.kind === "active" ? "active" : "pending"}${
-              highlightAutomation && (step.n === 4 || step.n === 5) ? " stage-step--automation" : ""
+              highlightAutomation && (step.n === 3 || step.n === 4) ? " stage-step--automation" : ""
             }`}
           >
             <div className="stage-step__dot" aria-hidden>
@@ -214,7 +196,6 @@ export const StageTimeline: React.FC<StageTimelineProps> = ({
               <div className="stage-step__head">
                 <span className="stage-step__num">[{step.n}]</span>
                 <span className="stage-step__title">{step.title}</span>
-                {step.badge && <span className="stage-step__badge">{step.badge}</span>}
                 <span className="stage-step__status" style={{ color: "var(--text-muted)" }}>
                   {step.statusRu}
                 </span>
