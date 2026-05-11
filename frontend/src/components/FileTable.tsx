@@ -16,6 +16,7 @@ export type FileRow = {
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
 import { Spinner } from "./ui/Spinner";
 import { BlockchainOnChainIcon } from "./BlockchainOnChainIcon";
+import { documentListLabel } from "../utils/documentLabels";
 
 /** Legacy: UPLOADED / REGISTERED без tx → показываем как FROZEN («черновик»). */
 export function patentDisplayStatus(status: string, hasTx: boolean): string {
@@ -25,14 +26,6 @@ export function patentDisplayStatus(status: string, hasTx: boolean): string {
 
 export function canSubmitForRegistration(status: string, hasTx: boolean): boolean {
   return !hasTx && ["FROZEN", "UPLOADED", "REJECTED"].includes(status);
-}
-
-function documentDisplayName(f: FileRow): string {
-  const t = f.title?.trim();
-  if (t) return t;
-  const d = f.description?.trim();
-  if (d) return d;
-  return f.file_name;
 }
 
 export const FileTable: React.FC<{
@@ -58,7 +51,7 @@ export const FileTable: React.FC<{
         {items.map((f) => {
           const hasTx = Boolean(f.blockchain_tx_hash);
           const showSubmit = onSubmitForRegistration && canSubmitForRegistration(f.status, hasTx);
-          const name = documentDisplayName(f);
+          const name = documentListLabel(f);
           const missingDescription = !f.description?.trim();
           return (
             <tr key={f.id}>

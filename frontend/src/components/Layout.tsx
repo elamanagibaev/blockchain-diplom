@@ -88,13 +88,13 @@ export const Layout: React.FC = () => {
     navigate("/");
   };
 
-  const sidebarWidth = collapsed ? 72 : 260;
+  const sidebarWidth = collapsed ? 80 : 260;
   const displayName = user?.email?.split("@")[0] || user?.email || "Пользователь";
   const email = user?.email || "—";
   const roleLabel = user?.role ? getRoleLabel(user.role) : "";
 
   const NavLinks = ({ expanded, layoutIdPrefix, onNavigate }: { expanded: boolean; layoutIdPrefix: string; onNavigate?: () => void }) => (
-    <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+    <nav className={cn("flex-1 space-y-1 overflow-y-auto py-4", expanded ? "px-3" : "px-0")}>
       {navItems.map((item) => {
         const active = isActive(item.path);
         return (
@@ -102,8 +102,10 @@ export const Layout: React.FC = () => {
             key={item.path}
             to={item.path}
             onClick={onNavigate}
+            title={!expanded ? item.title : undefined}
             className={cn(
-              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-200",
+              "group relative flex items-center rounded-lg transition-all duration-200",
+              expanded ? "gap-3 px-3 py-2.5" : "mx-auto h-11 w-11 justify-center p-0",
               active
                 ? "bg-primary/10 text-primary"
                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -162,11 +164,14 @@ export const Layout: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
-      <div className={cn("mt-3 flex gap-2 px-2", !expanded && "flex-col items-center")}>
+      <div className={cn("mt-3 flex gap-2", expanded ? "px-2" : "flex-col items-center px-0")}>
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 px-2 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+            expanded ? "flex-1 px-2 py-2" : "h-9 w-9 p-0"
+          )}
           aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
         >
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -175,7 +180,10 @@ export const Layout: React.FC = () => {
         <button
           type="button"
           onClick={onLogout}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 px-2 py-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 text-xs text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive",
+            expanded ? "flex-1 px-2 py-2" : "h-9 w-9 p-0"
+          )}
         >
           <LogOut className="h-4 w-4" />
           {expanded && <span>Выйти</span>}
@@ -237,7 +245,12 @@ export const Layout: React.FC = () => {
         transition={{ duration: 0.25, ease: "easeInOut" }}
         className="fixed left-0 top-0 z-40 hidden h-screen flex-col overflow-hidden border-r border-border bg-sidebar md:flex"
       >
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
+        <div
+          className={cn(
+            "flex h-16 shrink-0 items-center border-b border-border",
+            collapsed ? "justify-center gap-2 px-2" : "gap-3 px-4"
+          )}
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg gradient-primary">
             <Blocks className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -256,7 +269,10 @@ export const Layout: React.FC = () => {
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="ml-auto shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+              collapsed ? "h-8 w-8" : "ml-auto h-8 w-8"
+            )}
             aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"}
           >
             {collapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}

@@ -29,6 +29,8 @@ from app.utils.block_explorer import make_tx_explorer_url
 
 router = APIRouter(prefix="/files", tags=["files"])
 
+LEGACY_GENERATED_DIPLOMA_DESCRIPTION = "Автоматически сгенерированный диплом"
+
 
 def _attachment_content_disposition(filename: str) -> str:
     """RFC 5987 filename* so Cyrillic and other Unicode names work in browsers."""
@@ -133,12 +135,21 @@ def _to_read(
     ps = getattr(o, "processing_stage", None)
     if ps is None:
         ps = PipelineService.compute_processing_stage(o)
+    title = o.title or o.file_name
+    description = o.description
+    if (description or "").startswith(LEGACY_GENERATED_DIPLOMA_DESCRIPTION):
+        owner = getattr(o, "owner", None)
+        full_name = ((getattr(owner, "full_name", None) or "").strip() if owner else "") or "Выпускник"
+        year = getattr(owner, "enrollment_year", None) if owner else None
+        major = ((getattr(owner, "major", None) or "").strip() if owner else "") or "—"
+        title = title if title and title != o.file_name else f"{full_name} {year or '—'} год {major}"
+        description = title
     return DigitalObjectRead(
         id=o.id,
         file_name=o.file_name,
         mime_type=o.mime_type,
         size_bytes=o.size_bytes,
-        description=o.description,
+        description=description,
         sha256_hash=o.sha256_hash,
         status=o.status,
         created_at=o.created_at,
@@ -152,7 +163,7 @@ def _to_read(
         uploaded_by_wallet_address=(
             o.uploaded_by.wallet_address if getattr(o, "uploaded_by", None) else None
         ),
-        title=o.title or o.file_name,
+        title=title,
         document_type=o.document_type,
         storage_key=o.storage_key,
         blockchain_registered_at=o.blockchain_registered_at,

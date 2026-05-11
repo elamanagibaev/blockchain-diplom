@@ -37,6 +37,13 @@ class StudentService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    @staticmethod
+    def diploma_display_title(student: User) -> str:
+        full_name = (student.full_name or "Выпускник").strip() or "Выпускник"
+        year = student.enrollment_year or "—"
+        major = (student.major or "—").strip() or "—"
+        return f"{full_name} {year} год {major}".strip()
+
     def _assert_department(self, user: User) -> None:
         if user.role != "department":
             raise HTTPException(status_code=403, detail="Доступно только роли department")
@@ -290,12 +297,18 @@ class StudentService:
 
     def _create_digital_object_from_pdf(self, department_user: User, student: User, pdf_bytes: bytes, obj_id: UUID | None = None) -> DigitalObject:
         file_name = f"diploma_{student.id}.pdf"
+        display_title = self.diploma_display_title(student)
         sha = sha256_file(BytesIO(pdf_bytes))
         existing = self.db.query(DigitalObject).filter(DigitalObject.sha256_hash == sha).first()
         if existing:
             # Идемпотентность повторной выдачи: если это тот же студент и автогенерированный диплом,
             # используем существующую запись вместо ошибки.
-            if existing.owner_id == student.id and (existing.description or "").startswith("Автоматически сгенерированный диплом"):
+            if existing.owner_id == student.id and existing.file_name == file_name:
+                existing.title = display_title
+                existing.description = display_title
+                self.db.add(existing)
+                self.db.commit()
+                self.db.refresh(existing)
                 return existing
             raise HTTPException(status_code=400, detail="Диплом с таким хэшем уже существует")
 
@@ -307,13 +320,13 @@ class StudentService:
             owner_id=student.id,
             uploaded_by_id=department_user.id,
             file_name=file_name,
-            title=f"{(student.full_name or 'Выпускник').strip()} {student.enrollment_year or '—'} год {(student.major or '—').strip()}".strip(),
+            title=display_title,
             mime_type="application/pdf",
             size_bytes=len(pdf_bytes),
             storage_key=storage_key,
             storage_backend="local",
             sha256_hash=sha,
-            description="Автоматически сгенерированный диплом",
+            description=display_title,
             document_type="document",
             owner_wallet_address=student.wallet_address,
             visibility="public",
@@ -346,12 +359,19 @@ class StudentService:
             self.db.query(DigitalObject)
             .filter(
                 DigitalObject.owner_id == student.id,
-                DigitalObject.description == "Автоматически сгенерированный диплом",
+                DigitalObject.file_name == f"diploma_{student.id}.pdf",
             )
             .order_by(DigitalObject.created_at.desc())
             .first()
         )
         if existing_diploma:
+            title = self.diploma_display_title(student)
+            if existing_diploma.title != title or existing_diploma.description == "Автоматически сгенерированный диплом":
+                existing_diploma.title = title
+                existing_diploma.description = title
+                self.db.add(existing_diploma)
+                self.db.commit()
+                self.db.refresh(existing_diploma)
             return progress, existing_diploma
         if progress.graduated:
             raise HTTPException(status_code=400, detail="Студент уже выпускник")

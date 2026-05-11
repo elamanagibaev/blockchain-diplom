@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/ui/Spinner";
+import { documentListLabel } from "../utils/documentLabels";
 
 type DocRow = {
   id: string;
@@ -34,14 +35,6 @@ function shortWallet(addr: string | null | undefined): string {
 }
 
 type ActionKind = "sale" | "reject" | "review" | "registered";
-
-function documentListLabel(r: DocRow): string {
-  const d = r.description?.trim();
-  if (d) return d;
-  const t = r.title?.trim();
-  if (t) return t;
-  return r.file_name;
-}
 
 function mapRegistryAction(status: string, blockchainTx: string | null | undefined): { label: string; kind: ActionKind } {
   if (status === "TRANSFERRED") {
@@ -218,7 +211,7 @@ export const GlobalRegistryPage: React.FC = () => {
                   <th>Файл</th>
                   <th>Загрузил</th>
                   <th>Владелец</th>
-                  <th>Покупатель</th>
+                  <th>Получатель</th>
                   <th>Действие</th>
                   <th>Время</th>
                 </tr>
@@ -226,7 +219,7 @@ export const GlobalRegistryPage: React.FC = () => {
               <tbody>
                 {items.map((r) => {
                   const action = mapRegistryAction(r.status, r.blockchain_tx_hash);
-                  const buyerWallet = r.last_transfer_to_wallet || null;
+                  const recipientWallet = r.last_transfer_to_wallet || null;
                   const docLabel = documentListLabel(r);
                   return (
                     <tr key={r.id}>
@@ -243,7 +236,7 @@ export const GlobalRegistryPage: React.FC = () => {
                       <td>
                         <WalletCell address={r.owner_wallet_address} />
                       </td>
-                      <td>{buyerWallet ? <WalletCell address={buyerWallet} /> : <span className="muted">—</span>}</td>
+                      <td>{recipientWallet ? <WalletCell address={recipientWallet} /> : <span className="muted">—</span>}</td>
                       <td>
                         <span className={`soft-badge soft-badge--${action.kind}`}>{action.label}</span>
                       </td>

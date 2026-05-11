@@ -11,6 +11,7 @@ import { Spinner } from "../components/ui/Spinner";
 import { BlockchainInfoCard } from "../components/BlockchainInfoCard";
 import { StageTimeline } from "../components/StageTimeline";
 import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
+import { documentDetailLabel } from "../utils/documentLabels";
 
 type Data = {
   id: string;
@@ -429,7 +430,7 @@ export const FileDetailPage: React.FC = () => {
     canSubmitForRegistration(data.status, onChainRegistered) && user?.role === "department";
   const isOwner = user?.id === data.owner_id || user?.role === "admin";
 
-  const docDisplayName = data.description?.trim() || data.title?.trim() || data.file_name;
+  const docDisplayName = documentDetailLabel(data);
   const currentStage = approval?.stages.find((s) => s.state === "CURRENT") ?? null;
   const canActOnStage = Boolean(currentStage?.can_act);
   const isDeanApprovedPendingChain =
