@@ -19,6 +19,10 @@ type VerificationResult = {
   description: string | null;
   transaction_hash: string | null;
   integrity_status: string;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  trust_chain_tx_explorer_url?: string | null;
   sha256_hash?: string | null;
   sha256_stored?: string | null;
   blockchain_registered_at?: string | null;
@@ -37,6 +41,13 @@ function proofBannerMeta(vs: string): { title: string; sub: string; ok: boolean 
       ok: true,
       title: "✓ Документ подлинный",
       sub: "Хэш совпадает с записью в блокчейне.",
+    };
+  }
+  if (vs === "TRUST_CHAIN_BROKEN") {
+    return {
+      ok: false,
+      title: "✗ Цепочка доверия нарушена",
+      sub: "Текущие данные документа отличаются от версии, зарегистрированной в блокчейне.",
     };
   }
   if (vs === "NOT_FOUND") {
@@ -61,6 +72,19 @@ function proofBannerMeta(vs: string): { title: string; sub: string; ok: boolean 
     };
   }
   return { ok: null, title: vs, sub: "" };
+}
+
+function chainEventLabel(actionType: string): string {
+  switch (actionType) {
+    case "REGISTER":
+      return "Запись в блокчейн";
+    case "TRUST_CHAIN_BROKEN":
+      return "Цепочка доверия нарушена";
+    case "TRANSFER":
+      return "Передача прав";
+    default:
+      return actionType || "Событие блокчейна";
+  }
 }
 
 export const VerifyPage: React.FC = () => {
@@ -115,6 +139,7 @@ export const VerifyPage: React.FC = () => {
   }, []);
 
   const meta = result ? proofBannerMeta(result.verification_status) : null;
+  const trustChainBroken = result?.trust_chain_status === "BROKEN" || result?.integrity_status === "TRUST_CHAIN_BROKEN";
 
   return (
     <div>
@@ -217,6 +242,26 @@ export const VerifyPage: React.FC = () => {
           </div>
 
           <Card style={{ marginTop: 16 }}>
+            {trustChainBroken && (
+              <div
+                className="bad"
+                style={{
+                  padding: 12,
+                  border: "1px solid rgba(220, 38, 38, 0.35)",
+                  borderRadius: 8,
+                  background: "rgba(254, 242, 242, 0.9)",
+                  marginBottom: 16,
+                }}
+              >
+                <strong>Проверка по блокчейну не пройдена</strong>
+                <div>Причина: хэш текущих данных не совпадает с записью в блокчейне</div>
+                {result.trust_chain_tx_hash && (
+                  <div>
+                    Blockchain-событие: <code>{result.trust_chain_tx_hash}</code>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="row" style={{ gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 240px" }}>
                 <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
@@ -284,15 +329,15 @@ export const VerifyPage: React.FC = () => {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Тип</th>
+                        <th>Событие</th>
                         <th>Время</th>
-                        <th>Tx</th>
+                        <th>Транзакция</th>
                       </tr>
                     </thead>
                     <tbody>
                       {result.chain_events.map((ev, i) => (
                         <tr key={i}>
-                          <td>{ev.action_type}</td>
+                          <td>{chainEventLabel(ev.action_type)}</td>
                           <td>{ev.timestamp ? new Date(ev.timestamp).toLocaleString("ru-RU") : "—"}</td>
                           <td>
                             <code style={{ fontSize: 11 }}>{ev.tx_hash ? `${ev.tx_hash.slice(0, 14)}…` : "—"}</code>

@@ -24,6 +24,10 @@ type StudentGradesRow = {
     graduated: boolean;
   };
   grades: Grade[];
+  diploma_id?: string | null;
+  integrity_status?: "OK" | "MISMATCH" | "NOT_REGISTERED" | string | null;
+  registered_hash?: string | null;
+  current_hash?: string | null;
 };
 
 const COURSE_ORDER = [1, 2, 3, 4];
@@ -33,6 +37,7 @@ export const DepartmentGradesPage: React.FC = () => {
   const { notify } = useNotification();
   const [rows, setRows] = useState<StudentGradesRow[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [editingDataStudentId, setEditingDataStudentId] = useState<string | null>(null);
 
   const load = async () => {
     const res = await api.get<StudentGradesRow[]>("/department/students/grades");
@@ -97,16 +102,41 @@ export const DepartmentGradesPage: React.FC = () => {
     }
   };
 
+  const demoSetGrade = async (studentId: string, grade: Grade, value: string) => {
+    const num = Number(value);
+    if (!Number.isInteger(num) || num < 0 || num > 100) {
+      notify("error", "Оценка должна быть целым числом от 0 до 100");
+      return;
+    }
+    if (num === grade.grade) return;
+    setSavingId(grade.id);
+    try {
+      const res = await api.post(`/department/students/${studentId}/grades/${grade.id}/demo-data-change`, { grade: num });
+      await load();
+      const status = res.data?.integrity_status;
+      if (status === "MISMATCH") {
+        notify("warning", "Целостность нарушена: текущие данные отличаются от блокчейн-записи");
+      } else {
+        notify("success", "Данные изменены, расхождения с блокчейн-записью нет");
+      }
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      notify("error", ax?.response?.data?.detail || "Не удалось выполнить демо-изменение");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   if (user?.role !== "department") return <div className="bad">Доступ только для кафедры</div>;
 
   return (
-    <div className="stack">
+    <div className="stack department-grades-page">
       <h1 className="page-title">Оценки</h1>
       <div style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 8 }}>
         Максимум можно поставить 100%
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className="data-table" style={{ width: "100%", minWidth: 1400 }}>
+      <div className="department-grades-table-wrap">
+        <table className="data-table department-grades-table">
           <thead>
             <tr>
               <th>Студент</th>
@@ -126,9 +156,14 @@ export const DepartmentGradesPage: React.FC = () => {
               const canPromote = row.progress.current_course < 4 && canPromoteByYear && canPromoteByGrades;
               const fourthCourseReady = row.grades.filter((g) => g.course_year === 4).every((g) => g.grade !== null);
               const canGraduate = row.progress.current_course === 4 && !row.progress.graduated && fourthCourseReady;
+              const demoEditMode =
+                editingDataStudentId === row.student.id &&
+                Boolean(row.diploma_id) &&
+                row.integrity_status !== "NOT_REGISTERED";
 
               return (
-                <tr key={row.student.id}>
+                <React.Fragment key={row.student.id}>
+                <tr>
                   <td>{row.student.full_name || "—"}</td>
                   {COURSE_ORDER.flatMap((course) =>
                     (allSubjects.get(course) || []).map((subject) => {
@@ -136,7 +171,7 @@ export const DepartmentGradesPage: React.FC = () => {
                       if (!g) return <td key={`${row.student.id}-${course}-${subject}`}>—</td>;
                       const isCurrent = course === row.progress.current_course;
                       const isFuture = course > row.progress.current_course;
-                      const locked = g.locked || !isCurrent || isFuture;
+                      const locked = !demoEditMode && (g.locked || !isCurrent || isFuture);
                       return (
                         <td key={g.id} style={{ background: locked ? "var(--bg-secondary)" : "transparent" }}>
                           {locked ? (
@@ -148,7 +183,11 @@ export const DepartmentGradesPage: React.FC = () => {
                               max={100}
                               title="Оценка от 0 до 100"
                               defaultValue={g.grade ?? ""}
-                              onBlur={(e) => void setGrade(row.student.id, g, e.target.value)}
+                              onBlur={(e) =>
+                                void (demoEditMode
+                                  ? demoSetGrade(row.student.id, g, e.target.value)
+                                  : setGrade(row.student.id, g, e.target.value))
+                              }
                               disabled={savingId === g.id}
                               style={{ width: 90 }}
                             />
@@ -159,7 +198,20 @@ export const DepartmentGradesPage: React.FC = () => {
                   )}
                   <td>
                     {row.progress.graduated ? (
-                      "Выпускник"
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+                        <span>Выпускник</span>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() =>
+                            setEditingDataStudentId((current) => (current === row.student.id ? null : row.student.id))
+                          }
+                          disabled={!row.diploma_id || row.integrity_status === "NOT_REGISTERED" || savingId !== null}
+                          title="Демо-сценарий: имитация изменения оценки после регистрации диплома"
+                        >
+                          {demoEditMode ? "Завершить" : "Изменение данных"}
+                        </Button>
+                      </div>
                     ) : row.progress.current_course < 4 ? (
                       <Button size="sm" onClick={() => void promote(row.student.id)} disabled={!canPromote}>
                         Перевести на следующий курс
@@ -171,6 +223,7 @@ export const DepartmentGradesPage: React.FC = () => {
                     )}
                   </td>
                 </tr>
+                </React.Fragment>
               );
             })}
           </tbody>

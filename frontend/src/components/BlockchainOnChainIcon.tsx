@@ -5,7 +5,7 @@ type Props = {
   onChain: boolean;
 };
 
-/** Иконка наличия записи в блокчейне (таблица «Мои патенты»). */
+/** Иконка наличия записи в блокчейне (таблица «Мои документы»). */
 export const BlockchainOnChainIcon: React.FC<Props> = ({ onChain }) => {
   const label = onChain ? "Зарегистрирован в блокчейне" : "Ещё не в блокчейне";
   return (

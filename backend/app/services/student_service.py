@@ -18,10 +18,13 @@ from app.constants.student_curriculum import COURSE_SUBJECTS
 from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.models.digital_object import DigitalObject
+from app.models.document_event import DocumentEvent
+from app.models.blockchain_event import BlockchainEvent
 from app.models.student_grade import StudentGrade
 from app.models.student_progress import StudentProgress
 from app.models.user import User
 from app.services.blockchain_service import BlockchainService
+from app.services.auth_service import ensure_user_wallet
 from app.services.document_event_service import DocumentEventService
 from app.services.file_service import FileService
 from app.services.diploma_template_service import DiplomaTemplateService
@@ -48,6 +51,12 @@ class StudentService:
         if user.role != "department":
             raise HTTPException(status_code=403, detail="Доступно только роли department")
         if not user.university_id:
+            raise HTTPException(status_code=400, detail="У кафедры не указан университет")
+
+    def _assert_department_or_admin(self, user: User) -> None:
+        if user.role not in ("department", "admin"):
+            raise HTTPException(status_code=403, detail="Доступно только кафедре или администратору")
+        if user.role == "department" and not user.university_id:
             raise HTTPException(status_code=400, detail="У кафедры не указан университет")
 
     def _transliterate_to_latin(self, text: str) -> str:
@@ -116,7 +125,7 @@ class StudentService:
         )
         if not student:
             raise HTTPException(status_code=404, detail="Студент не найден")
-        if student.university_id != department_user.university_id:
+        if department_user.role != "admin" and student.university_id != department_user.university_id:
             raise HTTPException(status_code=403, detail="Студент другого университета")
         return student
 
@@ -294,6 +303,195 @@ class StudentService:
             verify_url=effective_verify_url,
             progress=progress,
         )
+
+    def _diploma_for_student(self, student: User) -> DigitalObject | None:
+        return (
+            self.db.query(DigitalObject)
+            .filter(
+                DigitalObject.owner_id == student.id,
+                DigitalObject.file_name == f"diploma_{student.id}.pdf",
+            )
+            .order_by(DigitalObject.created_at.desc())
+            .first()
+        )
+
+    def _current_diploma_pdf_bytes(self, student: User, diploma: DigitalObject) -> bytes:
+        grades = (
+            self.db.query(StudentGrade)
+            .filter(StudentGrade.student_id == student.id)
+            .order_by(StudentGrade.course_year.asc(), StudentGrade.subject.asc())
+            .all()
+        )
+        progress = self.db.query(StudentProgress).filter(StudentProgress.student_id == student.id).first()
+        verify_url = f"{settings.PUBLIC_VERIFY_BASE_URL.rstrip('/')}/verify/doc/{diploma.id}"
+        return DiplomaTemplateService().build_diploma_pdf(
+            student=student,
+            grades=grades,
+            document_id=diploma.id,
+            verify_url=verify_url,
+            progress=progress,
+            generated_at=diploma.created_at,
+        )
+
+    def _current_diploma_hash(self, student: User, diploma: DigitalObject) -> str:
+        pdf_bytes = self._current_diploma_pdf_bytes(student, diploma)
+        return sha256_file(BytesIO(pdf_bytes))
+
+    def _registered_original_metadata(self, diploma: DigitalObject) -> dict[str, str | int | None]:
+        latest = (
+            self.db.query(DocumentEvent)
+            .filter(DocumentEvent.document_id == diploma.id, DocumentEvent.action == DocumentEventAction.VERIFY_FAILED.value)
+            .order_by(DocumentEvent.timestamp.desc())
+            .first()
+        )
+        meta = latest.event_metadata if latest and isinstance(latest.event_metadata, dict) else {}
+        if meta.get("registered_original_storage_key"):
+            return {
+                "registered_original_storage_key": meta.get("registered_original_storage_key"),
+                "registered_original_storage_backend": meta.get("registered_original_storage_backend") or "local",
+                "registered_original_file_name": meta.get("registered_original_file_name") or diploma.file_name,
+                "registered_original_mime_type": meta.get("registered_original_mime_type") or diploma.mime_type,
+                "registered_original_size_bytes": meta.get("registered_original_size_bytes") or diploma.size_bytes,
+                "registered_original_hash": meta.get("registered_original_hash") or meta.get("registered_hash") or diploma.sha256_hash,
+            }
+        return {
+            "registered_original_storage_key": diploma.storage_key,
+            "registered_original_storage_backend": diploma.storage_backend,
+            "registered_original_file_name": diploma.file_name,
+            "registered_original_mime_type": diploma.mime_type,
+            "registered_original_size_bytes": diploma.size_bytes,
+            "registered_original_hash": diploma.sha256_hash,
+        }
+
+    def diploma_integrity_for_student(self, department_user: User, student_id: UUID) -> dict[str, str | UUID | None]:
+        self._assert_department_or_admin(department_user)
+        student = self._student_query(department_user, student_id)
+        diploma = self._diploma_for_student(student)
+        if not diploma or not diploma.blockchain_tx_hash:
+            return {
+                "diploma_id": diploma.id if diploma else None,
+                "integrity_status": "NOT_REGISTERED",
+                "registered_hash": diploma.sha256_hash if diploma else None,
+                "current_hash": None,
+            }
+        current_hash = self._current_diploma_hash(student, diploma)
+        chain_object = BlockchainService(self.db).get_object(str(diploma.blockchain_object_id or diploma.id))
+        registered_hash = (chain_object or {}).get("file_hash")
+        if not registered_hash:
+            original_meta = self._registered_original_metadata(diploma)
+            registered_hash = str(original_meta.get("registered_original_hash") or diploma.sha256_hash)
+        return {
+            "diploma_id": diploma.id,
+            "integrity_status": "OK" if current_hash == registered_hash else "MISMATCH",
+            "registered_hash": registered_hash,
+            "current_hash": current_hash,
+        }
+
+    def demo_change_registered_grade(
+        self,
+        department_user: User,
+        student_id: UUID,
+        grade_id: UUID,
+        grade_value: int,
+    ) -> tuple[StudentGrade, dict[str, str | UUID | None]]:
+        self._assert_department_or_admin(department_user)
+        department_user = ensure_user_wallet(department_user, self.db)
+        student = self._student_query(department_user, student_id)
+        grade = (
+            self.db.query(StudentGrade)
+            .filter(StudentGrade.id == grade_id, StudentGrade.student_id == student.id)
+            .first()
+        )
+        if not grade:
+            raise HTTPException(status_code=404, detail="Оценка не найдена")
+        if grade_value < 0 or grade_value > 100:
+            raise HTTPException(status_code=422, detail="Оценка должна быть от 0 до 100")
+
+        diploma = self._diploma_for_student(student)
+        if not diploma or not diploma.blockchain_tx_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="Демо-изменение доступно только после регистрации диплома в блокчейне",
+            )
+
+        old_value = grade.grade
+        grade.grade = grade_value
+        self.db.add(grade)
+        self.db.flush()
+
+        current_pdf_bytes = self._current_diploma_pdf_bytes(student, diploma)
+        current_hash = sha256_file(BytesIO(current_pdf_bytes))
+        object_id = str(diploma.blockchain_object_id or diploma.id)
+        chain_object = BlockchainService(self.db).get_object(object_id)
+        registered_hash = (chain_object or {}).get("file_hash") or diploma.sha256_hash
+        original_meta = self._registered_original_metadata(diploma)
+        if current_hash != diploma.sha256_hash:
+            existing = (
+                self.db.query(DigitalObject)
+                .filter(DigitalObject.sha256_hash == current_hash, DigitalObject.id != diploma.id)
+                .first()
+            )
+            if existing:
+                raise HTTPException(status_code=400, detail="Документ с такой текущей версией уже существует")
+            storage = LocalStorageBackend()
+            diploma.storage_key = storage.save(BytesIO(current_pdf_bytes), diploma.file_name)
+            diploma.storage_backend = "local"
+            diploma.size_bytes = len(current_pdf_bytes)
+            diploma.sha256_hash = current_hash
+            self.db.add(diploma)
+            self.db.flush()
+        integrity = {
+            "diploma_id": diploma.id,
+            "integrity_status": "OK" if current_hash == registered_hash else "MISMATCH",
+            "registered_hash": registered_hash,
+            "current_hash": current_hash,
+        }
+        trust_chain_tx_hash = None
+        if integrity["integrity_status"] == "MISMATCH":
+            details = (
+                "Цепочка доверия нарушена: хэш текущей версии диплома не совпадает с хэшем, "
+                "зарегистрированным в блокчейне; "
+                f"дисциплина={grade.subject}; старая_оценка={old_value}; новая_оценка={grade.grade}; "
+                f"хэш_в_блокчейне={registered_hash}; текущий_хэш={current_hash}"
+            )
+            trust_chain_tx_hash = BlockchainService(self.db).append_action(
+                object_id=object_id,
+                action_type="TRUST_CHAIN_BROKEN",
+                actor_wallet=department_user.wallet_address,
+                details=details,
+            )
+            self.db.add(
+                BlockchainEvent(
+                    action_type="TRUST_CHAIN_BROKEN",
+                    document_id=diploma.id,
+                    tx_hash=trust_chain_tx_hash,
+                    from_wallet=department_user.wallet_address,
+                    to_wallet=diploma.owner_wallet_address,
+                    initiator_user_id=department_user.id,
+                )
+            )
+        DocumentEventService(self.db).record(
+            document_id=diploma.id,
+            user_id=department_user.id,
+            action=DocumentEventAction.VERIFY_FAILED.value if integrity["integrity_status"] == "MISMATCH" else DocumentEventAction.VERIFY_SUCCESS.value,
+            metadata={
+                "method": "demo_data_change",
+                "subject": grade.subject,
+                "course_year": grade.course_year,
+                "old_grade": old_value,
+                "new_grade": grade.grade,
+                "registered_hash": registered_hash,
+                "current_hash": current_hash,
+                **original_meta,
+                "integrity_status": integrity["integrity_status"],
+                "trust_chain_status": "BROKEN" if integrity["integrity_status"] == "MISMATCH" else "OK",
+                "trust_chain_tx_hash": trust_chain_tx_hash,
+                "blockchain_object_id": object_id,
+            },
+        )
+        self.db.commit()
+        self.db.refresh(grade)
+        return grade, integrity
 
     def _create_digital_object_from_pdf(self, department_user: User, student: User, pdf_bytes: bytes, obj_id: UUID | None = None) -> DigitalObject:
         file_name = f"diploma_{student.id}.pdf"

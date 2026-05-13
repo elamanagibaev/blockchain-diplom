@@ -19,7 +19,7 @@ export type User = {
 type AuthContextType = {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User | null>;
   loginWithToken: (token?: string) => Promise<void>;
   logout: () => void;
 };
@@ -34,8 +34,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.get("/auth/me");
       setUser(res.data);
+      return res.data as User;
     } catch {
       setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -56,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     localStorage.setItem("access_token", res.data.access_token);
-    await fetchMe();
+    return await fetchMe();
   };
 
   const loginWithToken = async (token?: string) => {
@@ -79,4 +81,3 @@ export const useAuth = (): AuthContextType => {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 };
-

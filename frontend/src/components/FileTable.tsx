@@ -11,6 +11,7 @@ export type FileRow = {
   created_at: string;
   blockchain_tx_hash?: string | null;
   current_approval_stage_code?: string | null;
+  trust_chain_status?: string | null;
 };
 
 import { DocumentStatusBadge } from "./DocumentStatusBadge";

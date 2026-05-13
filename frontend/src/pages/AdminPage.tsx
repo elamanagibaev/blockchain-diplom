@@ -40,6 +40,28 @@ type PendingDoc = {
   created_at: string;
 };
 
+type AdminGrade = {
+  id: string;
+  student_id: string;
+  subject: string;
+  course_year: number;
+  grade: number | null;
+  locked: boolean;
+};
+
+type AdminStudentGradesRow = {
+  student: AdminUser;
+  progress: {
+    current_course: number;
+    graduated: boolean;
+  };
+  grades: AdminGrade[];
+  diploma_id?: string | null;
+  integrity_status?: string | null;
+};
+
+type AdminTab = "overview" | "data-change" | "users" | "universities";
+
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
@@ -47,6 +69,10 @@ export const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [universities, setUniversities] = useState<University[]>([]);
   const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
+  const [studentsGrades, setStudentsGrades] = useState<AdminStudentGradesRow[]>([]);
+  const [savingGradeId, setSavingGradeId] = useState<string | null>(null);
+  const [selectedGradeByStudent, setSelectedGradeByStudent] = useState<Record<string, string>>({});
+  const [newGradeByStudent, setNewGradeByStudent] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [newUniName, setNewUniName] = useState("");
@@ -54,12 +80,20 @@ export const AdminPage: React.FC = () => {
   const [newUniCode, setNewUniCode] = useState("");
   const [addingUni, setAddingUni] = useState(false);
   const [editingCodes, setEditingCodes] = useState<Record<number, string>>({});
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const loadPending = () => {
     api
       .get<PendingDoc[]>("/admin/documents/pending")
       .then((r) => setPendingDocs(r.data))
       .catch(() => setPendingDocs([]));
+  };
+
+  const loadStudentsGrades = () => {
+    api
+      .get<AdminStudentGradesRow[]>("/admin/students/grades")
+      .then((r) => setStudentsGrades(r.data))
+      .catch(() => setStudentsGrades([]));
   };
 
   useEffect(() => {
@@ -79,6 +113,7 @@ export const AdminPage: React.FC = () => {
         .catch(() => setUniversities([])),
     ]).finally(() => setLoading(false));
     loadPending();
+    loadStudentsGrades();
   }, []);
 
   const registerViaFilesApi = (id: string) => {
@@ -222,6 +257,36 @@ export const AdminPage: React.FC = () => {
       });
   };
 
+  const adminDemoSetGrade = (studentId: string, grade: AdminGrade | undefined, value: string) => {
+    if (!grade) {
+      notify("error", "Выберите дисциплину");
+      return;
+    }
+    const num = Number(value);
+    if (!Number.isInteger(num) || num < 0 || num > 100) {
+      notify("error", "Оценка должна быть целым числом от 0 до 100");
+      return;
+    }
+    if (num === grade.grade) return;
+    setSavingGradeId(grade.id);
+    api
+      .post(`/admin/students/${studentId}/grades/${grade.id}/demo-data-change`, { grade: num })
+      .then((r) => {
+        loadStudentsGrades();
+        notifyDashboardRefresh();
+        notify(
+          r.data?.integrity_status === "MISMATCH" ? "warning" : "success",
+          r.data?.integrity_status === "MISMATCH"
+            ? "Цепочка доверия нарушена: изменение зафиксировано в блокчейне"
+            : "Оценка изменена"
+        );
+      })
+      .catch((err: any) => {
+        notify("error", err?.response?.data?.detail || "Не удалось изменить оценку");
+      })
+      .finally(() => setSavingGradeId(null));
+  };
+
   if (user?.role !== "admin") {
     return (
       <div className="page admin-page">
@@ -242,6 +307,26 @@ export const AdminPage: React.FC = () => {
         subtitle="Финальная on-chain регистрация, пользователи и справочник вузов (согласование: кафедра → деканат)"
       />
 
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        {[
+          ["overview", "Обзор"],
+          ["data-change", "Изменение данных"],
+          ["users", "Пользователи"],
+          ["universities", "Университеты"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={`tab ${activeTab === key ? "tab--active" : ""}`}
+            onClick={() => setActiveTab(key as AdminTab)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "overview" && (
+        <>
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,2.2fr) minmax(0,3fr)", gap: 16 }}>
         <div className="card card--subtle">
           <div className="label">Общее состояние</div>
@@ -350,11 +435,117 @@ export const AdminPage: React.FC = () => {
           )}
         </div>
       </section>
+        </>
+      )}
 
+      {activeTab === "data-change" && (
+      <section className="admin-zone admin-zone--users">
+        <div className="admin-zone__head">
+          <h2 className="admin-zone__title">Проверка изменения данных</h2>
+          <p className="admin-zone__sub">
+            Администратор видит студентов всех вузов и может имитировать изменение оценки после регистрации диплома.
+          </p>
+        </div>
+        <div className="admin-zone__body">
+          <div className="ui-table-wrap table-scroll">
+            <table className="w-full" style={{ width: "100%", minWidth: 1180 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: "22%" }}>Email</th>
+                  <th>Вуз</th>
+                  <th style={{ width: "28%" }}>Дисциплина</th>
+                  <th>Текущая</th>
+                  <th>Новая</th>
+                  <th>Статус</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {studentsGrades.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="muted">
+                      Студенты не найдены
+                    </td>
+                  </tr>
+                ) : (
+                  studentsGrades.map((row) => {
+                    const editable = Boolean(row.diploma_id) && row.integrity_status !== "NOT_REGISTERED";
+                    const availableGrades = row.grades.filter((g) => g.grade !== null);
+                    const selectedGradeId = selectedGradeByStudent[row.student.id] || availableGrades[0]?.id || "";
+                    const selectedGrade = availableGrades.find((g) => g.id === selectedGradeId);
+                    const value = newGradeByStudent[row.student.id] ?? String(selectedGrade?.grade ?? "");
+                    return (
+                      <tr key={row.student.id}>
+                        <td>{row.student.email}</td>
+                        <td>{row.student.university_name || "—"}</td>
+                        <td>
+                          <select
+                            className="input"
+                            value={selectedGradeId}
+                            disabled={!editable}
+                            onChange={(e) => {
+                              const gradeId = e.target.value;
+                              const grade = availableGrades.find((g) => g.id === gradeId);
+                              setSelectedGradeByStudent((prev) => ({ ...prev, [row.student.id]: gradeId }));
+                              setNewGradeByStudent((prev) => ({ ...prev, [row.student.id]: String(grade?.grade ?? "") }));
+                            }}
+                            style={{ width: "100%", minWidth: 280 }}
+                          >
+                            {availableGrades.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.course_year} курс · {g.subject}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>{selectedGrade?.grade ?? "—"}</td>
+                        <td>
+                          <input
+                            className="input"
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={value}
+                            disabled={!editable || savingGradeId === selectedGradeId}
+                            onChange={(e) => setNewGradeByStudent((prev) => ({ ...prev, [row.student.id]: e.target.value }))}
+                            style={{ width: 90 }}
+                          />
+                        </td>
+                        <td>
+                          {row.integrity_status === "MISMATCH" ? (
+                            <span className="bad">Данные изменены</span>
+                          ) : row.integrity_status === "NOT_REGISTERED" ? (
+                            <span className="muted">Диплом не зарегистрирован</span>
+                          ) : (
+                            <span className="ok">Без изменений</span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            disabled={!editable || !selectedGrade || savingGradeId === selectedGradeId}
+                            onClick={() => adminDemoSetGrade(row.student.id, selectedGrade, value)}
+                          >
+                            {savingGradeId === selectedGradeId ? "…" : "Применить"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {activeTab === "users" && (
       <section className="admin-zone admin-zone--users">
         <div className="admin-zone__head">
           <h2 className="admin-zone__title">Пользователи</h2>
-          <p className="admin-zone__sub">Роли, вуз и учётные записи платформы.</p>
+          <p className="admin-zone__sub">Все пользователи платформы, включая студентов всех вузов.</p>
         </div>
         <div className="admin-zone__body">
           {loading ? (
@@ -363,23 +554,20 @@ export const AdminPage: React.FC = () => {
             </div>
           ) : (
             <div className="ui-table-wrap table-scroll">
-              <table className="w-full" style={{ width: "100%", minWidth: 1200 }}>
+              <table className="w-full" style={{ width: "100%", minWidth: 980 }}>
                 <thead>
                   <tr>
-                    <th>ФИО</th>
-                    <th>Email</th>
-                    <th>Роль</th>
-                    <th>Университет</th>
-                    <th>Год</th>
-                    <th>Специальность</th>
-                    <th>Активен</th>
-                    <th>Действия</th>
+                    <th style={{ width: "28%" }}>Email</th>
+                    <th style={{ width: "16%" }}>Роль</th>
+                    <th style={{ width: "28%" }}>Университет</th>
+                    <th style={{ width: "18%" }}>Обучение</th>
+                    <th style={{ width: "10%" }}>Действие</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="muted">
+                      <td colSpan={5} className="muted">
                         Пользователей пока нет
                       </td>
                     </tr>
@@ -387,9 +575,8 @@ export const AdminPage: React.FC = () => {
                         const isProtectedAdmin = u.role === "admin";
                         return (
                         <tr key={u.id}>
-                          <td>{u.full_name || "—"}</td>
                           <td>{u.email}</td>
-                          <td style={{ textAlign: "center" }}>
+                          <td>
                             <select
                               value={u.role}
                               onChange={(e) => updateRole(u.id, e.target.value)}
@@ -404,7 +591,7 @@ export const AdminPage: React.FC = () => {
                               <option value="admin">Администратор</option>
                             </select>
                           </td>
-                          <td style={{ textAlign: "center" }}>
+                          <td>
                             <select
                               className="input"
                               style={{ maxWidth: 220, fontSize: 13, padding: "6px 8px" }}
@@ -420,13 +607,12 @@ export const AdminPage: React.FC = () => {
                               ))}
                             </select>
                           </td>
-                          <td>{u.enrollment_year ?? "—"}</td>
-                          <td>{u.major || "—"}</td>
-                          <td style={{ textAlign: "center" }}>
-                            {u.is_active ? <span className="ok">Активен</span> : <span className="muted">Неактивен</span>}
+                          <td>
+                            <div>{u.major || "—"}</div>
+                            <div className="muted" style={{ fontSize: 12 }}>{u.enrollment_year ? `${u.enrollment_year} год` : "Год не указан"}</div>
                           </td>
-                          <td style={{ textAlign: "center" }}>
-                            <button type="button" className="btn btn-sm btn-danger" style={{ margin: "0 auto", display: "inline-flex", justifyContent: "center", alignItems: "center" }} onClick={() => deleteUser(u.id)} disabled={isProtectedAdmin}>
+                          <td>
+                            <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteUser(u.id)} disabled={isProtectedAdmin}>
                               {isProtectedAdmin ? "Защищён" : "Удалить"}
                             </button>
                           </td>
@@ -439,7 +625,9 @@ export const AdminPage: React.FC = () => {
           )}
         </div>
       </section>
+      )}
 
+      {activeTab === "universities" && (
       <section className="admin-zone admin-zone--users" style={{ marginTop: 24 }}>
         <div className="admin-zone__head">
           <h2 className="admin-zone__title">Университеты</h2>
@@ -535,6 +723,7 @@ export const AdminPage: React.FC = () => {
           </form>
         </div>
       </section>
+      )}
     </div>
   );
 };

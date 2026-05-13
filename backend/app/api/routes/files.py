@@ -22,7 +22,7 @@ from app.schemas.files import (
 )
 from app.services.blockchain_service import BlockchainService
 from app.services.diploma_automation_service import DiplomaAutomationService
-from app.services.file_service import FileService
+from app.services.file_service import FileService, get_storage_backend
 from app.services.pipeline_service import PipelineService
 from app.services.approval_workflow_service import ApprovalWorkflowService
 from app.utils.block_explorer import make_tx_explorer_url
@@ -43,6 +43,67 @@ def _attachment_content_disposition(filename: str) -> str:
 
 class StudentWalletBody(BaseModel):
     student_wallet_address: str
+
+
+def _trust_chain_snapshot(db: Session, document_id: UUID) -> dict[str, str | bool | None]:
+    rows = (
+        db.query(DocumentEvent)
+        .filter(DocumentEvent.document_id == document_id, DocumentEvent.action == "VERIFY_FAILED")
+        .order_by(DocumentEvent.timestamp.desc())
+        .limit(20)
+        .all()
+    )
+    for row in rows:
+        meta = row.event_metadata if isinstance(row.event_metadata, dict) else {}
+        if meta.get("method") == "demo_data_change" and meta.get("integrity_status") == "MISMATCH":
+            tx_hash = meta.get("trust_chain_tx_hash")
+            actor = db.query(User).filter(User.id == row.user_id).first() if row.user_id else None
+            return {
+                "trust_chain_status": "BROKEN",
+                "trust_chain_reason": "HASH_MISMATCH",
+                "trust_chain_tx_hash": tx_hash,
+                "trust_chain_tx_explorer_url": make_tx_explorer_url(tx_hash),
+                "trust_chain_actor_email": actor.email if actor else None,
+                "trust_chain_actor_wallet_address": actor.wallet_address if actor else None,
+                "registered_hash": meta.get("registered_hash"),
+                "current_hash": meta.get("current_hash"),
+                "registered_original_available": bool(meta.get("registered_original_storage_key")),
+                "registered_original_hash": meta.get("registered_original_hash") or meta.get("registered_hash"),
+            }
+    return {
+        "trust_chain_status": "OK",
+        "trust_chain_reason": None,
+        "trust_chain_tx_hash": None,
+        "trust_chain_tx_explorer_url": None,
+        "trust_chain_actor_email": None,
+        "trust_chain_actor_wallet_address": None,
+        "registered_hash": None,
+        "current_hash": None,
+        "registered_original_available": False,
+        "registered_original_hash": None,
+    }
+
+
+def _registered_original_snapshot(db: Session, document_id: UUID) -> dict[str, str | int] | None:
+    rows = (
+        db.query(DocumentEvent)
+        .filter(DocumentEvent.document_id == document_id, DocumentEvent.action == "VERIFY_FAILED")
+        .order_by(DocumentEvent.timestamp.desc())
+        .limit(20)
+        .all()
+    )
+    for row in rows:
+        meta = row.event_metadata if isinstance(row.event_metadata, dict) else {}
+        key = meta.get("registered_original_storage_key")
+        if meta.get("method") == "demo_data_change" and key:
+            return {
+                "storage_key": key,
+                "storage_backend": meta.get("registered_original_storage_backend") or "local",
+                "file_name": meta.get("registered_original_file_name") or "registered_original.pdf",
+                "mime_type": meta.get("registered_original_mime_type") or "application/pdf",
+                "size_bytes": meta.get("registered_original_size_bytes") or 0,
+            }
+    return None
 
 
 @router.post("/upload", response_model=DigitalObjectCreateResponse)
@@ -129,6 +190,7 @@ def _to_read(
     fr, to = (None, None)
     if last_transfer:
         fr, to = last_transfer
+    trust = _trust_chain_snapshot(db=o._sa_instance_state.session, document_id=o.id)
     hist = getattr(o, "stage_history", None)
     if not isinstance(hist, list):
         hist = []
@@ -187,6 +249,7 @@ def _to_read(
             if o.owner is not None and getattr(o.owner, "university_id", None) is not None
             else None
         ),
+        **trust,
     )
 
 
@@ -400,5 +463,32 @@ def download_file(
         media_type=mime_type or "application/octet-stream",
         headers={
             "Content-Disposition": _attachment_content_disposition(filename),
+        },
+    )
+
+
+@router.get("/{obj_id}/registered-original/download")
+def download_registered_original(
+    obj_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Открывает эталонную версию PDF, хэш которой был зарегистрирован в блокчейне."""
+    fs = FileService(db)
+    obj = fs.get_object(current_user, obj_id, require_owner=False)
+    fs.assert_can_read_document_file(current_user, obj)
+    original = _registered_original_snapshot(db, obj_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Зарегистрированный оригинал не найден")
+    try:
+        storage = get_storage_backend(str(original["storage_backend"]))
+        stream = storage.get_stream(str(original["storage_key"]))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Оригинальный файл не найден в хранилище")
+    return StreamingResponse(
+        stream,
+        media_type=str(original["mime_type"] or "application/pdf"),
+        headers={
+            "Content-Disposition": _attachment_content_disposition(str(original["file_name"] or "registered_original.pdf")),
         },
     )

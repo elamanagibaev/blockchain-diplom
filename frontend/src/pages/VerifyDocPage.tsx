@@ -16,12 +16,21 @@ type PublicVerify = {
   hash_short?: string | null;
   verify_url: string;
   is_authentic: boolean;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  trust_chain_tx_explorer_url?: string | null;
+  registered_hash?: string | null;
+  current_hash?: string | null;
+  registered_original_available?: boolean;
+  registered_original_hash?: string | null;
   tx_hash?: string | null;
   tx_explorer_url?: string | null;
   file_name?: string | null;
   mime_type?: string | null;
   size_bytes?: number | null;
   file_preview_url?: string | null;
+  registered_original_preview_url?: string | null;
 };
 
 function statusRu(status?: string | null): string {
@@ -81,6 +90,11 @@ export const VerifyDocPage: React.FC = () => {
     return toPublicApiUrl(data.file_preview_url);
   }, [data?.file_preview_url]);
 
+  const registeredOriginalUrl = useMemo(() => {
+    if (!data?.registered_original_preview_url) return "";
+    return toPublicApiUrl(data.registered_original_preview_url);
+  }, [data?.registered_original_preview_url]);
+
   const txUrl = useMemo(() => {
     const direct = (data?.tx_explorer_url || "").trim();
     if (direct) return direct;
@@ -115,7 +129,9 @@ export const VerifyDocPage: React.FC = () => {
   const statusBadges = [
     data.status ? "Документ зарегистрирован" : "Данные не найдены",
     data.is_authentic ? "Запись подтверждена в блокчейне" : "Запись в блокчейне не подтверждена",
+    data.trust_chain_status === "BROKEN" ? "Цепочка доверия нарушена" : "Цепочка доверия не нарушена",
   ];
+  const trustChainBroken = data.trust_chain_status === "BROKEN";
 
   const mono: React.CSSProperties = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
@@ -137,12 +153,30 @@ export const VerifyDocPage: React.FC = () => {
           <p style={{ marginTop: 8, padding: 10, border: "1px solid #bfdbfe", borderRadius: 8, background: "#eff6ff", color: "#1e3a8a" }}>
             QR-код подтверждает наличие документа в реестре системы. Для полной проверки подлинности необходимо загрузить исходный файл: система рассчитает SHA-256 и сравнит его с зарегистрированным значением.
           </p>
+          {trustChainBroken && (
+            <div style={{ marginTop: 10, padding: 12, border: "1px solid #fca5a5", borderRadius: 8, background: "#fef2f2", color: "#991b1b" }}>
+              <b>Цепочка доверия нарушена.</b> Текущие данные документа отличаются от версии, зарегистрированной в блокчейне.
+              <div style={{ marginTop: 8 }}>
+                <small>Хэш, зарегистрированный в блокчейне</small>
+                <div style={mono}>{data.registered_hash || data.sha256_hash || "—"}</div>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <small>Хэш текущей версии</small>
+                <div style={mono}>{data.current_hash || "—"}</div>
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
             {statusBadges.map((b) => <span key={b} style={{ border: "1px solid #cbd5e1", borderRadius: 999, padding: "4px 10px", fontSize: 13 }}>{b}</span>)}
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <Link to="/verify" className="btn btn-primary">Проверить файл полностью</Link>
             {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">Открыть файл</a>}
+            {trustChainBroken && registeredOriginalUrl && (
+              <a href={registeredOriginalUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                Открыть зарегистрированный оригинал
+              </a>
+            )}
             <button type="button" className="btn btn-outline" onClick={copyId}>Скопировать ID документа</button>
             {txUrl && <a href={txUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">Открыть транзакцию</a>}
             {copied && <span style={{ alignSelf: "center", color: "#166534" }}>Скопировано</span>}
@@ -154,6 +188,8 @@ export const VerifyDocPage: React.FC = () => {
             <h3>Статус документа</h3>
             <p>Статус в системе: <b>{statusRu(data.status)}</b></p>
             <p>Подтверждение в блокчейне: <b>{data.is_authentic ? "Да" : "Нет"}</b></p>
+            <p>Проверка по блокчейну: <b>{trustChainBroken ? "Не пройдена" : "Пройдена"}</b></p>
+            {trustChainBroken && <p>Причина: <b>хэш текущих данных не совпадает с записью в блокчейне</b></p>}
             <p>Дата регистрации / учёта: <b>{data.registration_timestamp ? new Date(data.registration_timestamp).toLocaleString() : "—"}</b></p>
           </article>
 
@@ -166,7 +202,6 @@ export const VerifyDocPage: React.FC = () => {
           <article style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 12, padding: 14 }}>
             <h3>Криптографические данные</h3>
             <div style={{ marginBottom: 8 }}><small>SHA-256</small><div style={mono}>{data.sha256_hash || "—"}</div></div>
-            <div style={{ marginBottom: 8 }}><small>Краткий хэш</small><div style={mono}>{data.hash_short || "—"}</div></div>
             <div><small>Идентификатор документа</small><div style={mono}>{data.document_id}</div></div>
           </article>
 
@@ -195,6 +230,15 @@ export const VerifyDocPage: React.FC = () => {
               <>
                 <div style={mono}>{data.tx_hash}</div>
                 {txUrl ? <a style={{ marginTop: 8, display: "inline-flex" }} href={txUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">Открыть транзакцию в обозревателе</a> : <p style={{ color: "#475569" }}>Ссылка на обозреватель недоступна.</p>}
+                {trustChainBroken && data.trust_chain_tx_hash && (
+                  <div style={{ marginTop: 12 }}>
+                    <h4 style={{ margin: "0 0 6px" }}>Blockchain-событие нарушения</h4>
+                    <div style={mono}>{data.trust_chain_tx_hash}</div>
+                    <a style={{ marginTop: 8, display: "inline-flex" }} href={data.trust_chain_tx_explorer_url || getExplorerTxUrlOptional(data.trust_chain_tx_hash)} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                      Открыть событие нарушения
+                    </a>
+                  </div>
+                )}
               </>
             ) : (
               <p style={{ color: "#475569" }}>Хэш транзакции недоступен в публичных данных.</p>

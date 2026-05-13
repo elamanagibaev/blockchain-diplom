@@ -10,6 +10,7 @@ const LABELS: Record<string, string> = {
   REGISTERED: "В реестре (on-chain)",
   REGISTERED_ON_CHAIN: "В реестре",
   ASSIGNED_TO_OWNER: "Закреплён за выпускником",
+  TRUST_CHAIN_BROKEN: "Данные изменены",
   REJECTED: "Отклонён",
   TRANSFERRED: "Передан",
 };
@@ -37,7 +38,7 @@ export const DocumentStatusBadge: React.FC<Props> = ({ status, onChain }) => {
     display === "PENDING_APPROVAL"
   ) {
     kind = "warn";
-  } else if (display === "REJECTED") kind = "bad";
+  } else if (display === "REJECTED" || display === "TRUST_CHAIN_BROKEN") kind = "bad";
   else if (display === "FROZEN" || display === "UPLOADED") kind = "accent";
 
   return <span className={`doc-status-badge doc-status-badge--${kind}`}>{ru}</span>;

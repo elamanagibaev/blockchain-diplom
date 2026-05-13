@@ -13,6 +13,14 @@ from app.models.document_event import DocumentEvent
 from app.models.university import University
 from app.models.user import User
 from app.schemas.files import DigitalObjectRead, DocumentEventJournalRead
+from app.schemas.department import (
+    DepartmentStudentGradesRead,
+    DepartmentStudentRead,
+    DemoGradeChangeResponse,
+    GradeUpdateRequest,
+    StudentGradeRead,
+    StudentProgressRead,
+)
 from app.schemas.university import UniversityCodeUpdate, UniversityCreate, UniversityRead
 from app.schemas.user import UserRead
 from app.constants.document_events import DocumentEventAction
@@ -21,6 +29,7 @@ from app.services.blockchain_service import BlockchainService
 from app.services.diploma_automation_service import DiplomaAutomationService
 from app.services.document_event_service import DocumentEventService
 from app.services.file_service import FileService
+from app.services.student_service import StudentService
 from app.utils.block_explorer import make_tx_explorer_url
 
 logger = logging.getLogger(__name__)
@@ -32,6 +41,20 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
     role: str | None = None
     university_id: int | None = None
+
+
+def _student_read(user: User) -> DepartmentStudentRead:
+    return DepartmentStudentRead(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        university_id=user.university_id,
+        university_name=user.university.name if getattr(user, "university", None) else None,
+        enrollment_year=user.enrollment_year,
+        major=user.major,
+        created_at=user.created_at,
+    )
 
 
 def _doc_to_read(o) -> DigitalObjectRead:
@@ -217,8 +240,100 @@ def reject_registration(
 
 @router.get("/users", response_model=List[UserRead])
 def list_users(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-    users = db.query(User).options(joinedload(User.university)).order_by(User.created_at.desc()).all()
+    users = (
+        db.query(User)
+        .options(joinedload(User.university))
+        .filter(User.is_active.is_(True))
+        .order_by(User.created_at.desc())
+        .all()
+    )
     return [UserRead.from_orm(u) for u in users]
+
+
+@router.get("/students/grades", response_model=List[DepartmentStudentGradesRead])
+def list_all_students_grades(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    from app.models.student_grade import StudentGrade
+    from app.models.student_progress import StudentProgress
+
+    students = (
+        db.query(User)
+        .options(joinedload(User.university))
+        .filter(User.role == "student", User.is_active.is_(True))
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    service = StudentService(db)
+    out: list[DepartmentStudentGradesRead] = []
+    for student in students:
+        progress = db.query(StudentProgress).filter(StudentProgress.student_id == student.id).first()
+        if not progress:
+            continue
+        grades = (
+            db.query(StudentGrade)
+            .filter(StudentGrade.student_id == student.id)
+            .order_by(StudentGrade.course_year.asc(), StudentGrade.subject.asc())
+            .all()
+        )
+        out.append(
+            DepartmentStudentGradesRead(
+                student=_student_read(student),
+                progress=StudentProgressRead(
+                    current_course=progress.current_course,
+                    graduated=progress.graduated,
+                    created_at=progress.created_at,
+                ),
+                grades=[
+                    StudentGradeRead(
+                        id=g.id,
+                        student_id=g.student_id,
+                        subject=g.subject,
+                        course_year=g.course_year,
+                        grade=g.grade,
+                        locked=g.locked,
+                        created_at=g.created_at,
+                        updated_at=g.updated_at,
+                    )
+                    for g in grades
+                ],
+                **service.diploma_integrity_for_student(current_admin, student.id),
+            )
+        )
+    return out
+
+
+@router.post("/students/{student_id}/grades/{grade_id}/demo-data-change", response_model=DemoGradeChangeResponse)
+def admin_demo_change_grade_after_registration(
+    student_id: UUID,
+    grade_id: UUID,
+    body: GradeUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    grade, integrity = StudentService(db).demo_change_registered_grade(
+        current_admin,
+        student_id,
+        grade_id,
+        body.grade,
+    )
+    return DemoGradeChangeResponse(
+        grade=StudentGradeRead(
+            id=grade.id,
+            student_id=grade.student_id,
+            subject=grade.subject,
+            course_year=grade.course_year,
+            grade=grade.grade,
+            locked=grade.locked,
+            created_at=grade.created_at,
+            updated_at=grade.updated_at,
+        ),
+        diploma_id=integrity["diploma_id"],
+        integrity_status=integrity["integrity_status"],
+        registered_hash=integrity["registered_hash"],
+        current_hash=integrity["current_hash"],
+    )
 
 
 @router.patch("/users/{user_id}")

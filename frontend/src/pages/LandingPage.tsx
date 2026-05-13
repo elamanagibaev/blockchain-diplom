@@ -11,6 +11,11 @@ type VerifyResponse = {
   file_name?: string | null;
   blockchain_registered_at?: string | null;
   registration_timestamp?: string | null;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  registered_hash?: string | null;
+  current_hash?: string | null;
 };
 
 function formatRegisteredAt(data: VerifyResponse): string | null {
@@ -49,12 +54,20 @@ export const LandingPage: React.FC = () => {
   const onVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     const hash = hashValue.trim();
-    if (!hash) return;
+    if (verifyTab === "file" && !selectedFile) return;
+    if (verifyTab === "hash" && !hash) return;
     setLoading(true);
     setNetworkError(false);
     setResult(null);
     try {
-      const { data } = await api.get<VerifyResponse>(`/verify/hash/${encodeURIComponent(hash)}`);
+      const { data } =
+        verifyTab === "file" && selectedFile
+          ? await api.post<VerifyResponse>("/verify/file", (() => {
+              const form = new FormData();
+              form.append("upload_file", selectedFile);
+              return form;
+            })())
+          : await api.get<VerifyResponse>(`/verify/hash/${encodeURIComponent(hash)}`);
       setResult(data);
     } catch (err: unknown) {
       const ax = err as { response?: unknown; message?: string };
@@ -70,9 +83,13 @@ export const LandingPage: React.FC = () => {
 
   const isAuthentic =
     result?.verification_status === "VALID" && result.is_verified === true;
+  const isTrustBroken =
+    result?.verification_status === "TRUST_CHAIN_BROKEN" ||
+    result?.trust_chain_status === "BROKEN";
   const isMissing =
     result &&
     !isAuthentic &&
+    !isTrustBroken &&
     (result.verification_status === "NOT_FOUND" ||
       result.verification_status === "INVALID" ||
       result.verification_status === "INVALID_HASH");
@@ -220,7 +237,7 @@ export const LandingPage: React.FC = () => {
               )}
               <button
                 type="submit"
-                disabled={loading || !hashValue.trim()}
+                disabled={loading || (verifyTab === "file" ? !selectedFile : !hashValue.trim())}
                 className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:pointer-events-none disabled:opacity-50"
                 style={{ backgroundColor: "var(--color-accent, #0d9488)" }}
               >
@@ -260,6 +277,36 @@ export const LandingPage: React.FC = () => {
                   <p className="mt-1 text-foreground/90">
                     <span className="text-muted-foreground">Дата регистрации в блокчейне: </span>
                     {formatRegisteredAt(result)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {isTrustBroken && result && (
+              <div
+                className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                role="status"
+              >
+                <p className="font-semibold">✗ Цепочка доверия нарушена</p>
+                <p className="mt-2 text-foreground/90">
+                  Текущие данные документа отличаются от версии, зарегистрированной в блокчейне.
+                </p>
+                {result.file_name && (
+                  <p className="mt-2 text-foreground/90">
+                    <span className="text-muted-foreground">Документ: </span>
+                    {result.file_name}
+                  </p>
+                )}
+                {result.registered_hash && (
+                  <p className="mt-2 break-all text-foreground/90">
+                    <span className="text-muted-foreground">Хэш в блокчейне: </span>
+                    {result.registered_hash}
+                  </p>
+                )}
+                {result.current_hash && (
+                  <p className="mt-1 break-all text-foreground/90">
+                    <span className="text-muted-foreground">Текущий хэш: </span>
+                    {result.current_hash}
                   </p>
                 )}
               </div>

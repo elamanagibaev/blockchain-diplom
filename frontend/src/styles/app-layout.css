@@ -923,10 +923,16 @@ textarea:focus {
 }
 .blockchain-proof-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: start;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
   width: 100%;
+}
+.blockchain-proof-row > span:first-child {
+  white-space: nowrap;
+}
+.blockchain-proof-row code {
+  line-height: 1.35;
 }
 .bad {
   color: var(--error);
@@ -941,6 +947,37 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.app-main-inner:has(.department-grades-page) {
+  max-width: none;
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+.department-grades-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.department-grades-table {
+  min-width: 1900px;
+  table-layout: fixed;
+}
+
+.department-grades-table th:first-child,
+.department-grades-table td:first-child {
+  width: 190px;
+}
+
+.department-grades-table th:last-child,
+.department-grades-table td:last-child {
+  width: 190px;
+}
+
+.department-grades-table input[type="number"] {
+  width: 96px;
+  max-width: 100%;
 }
 
 .row {

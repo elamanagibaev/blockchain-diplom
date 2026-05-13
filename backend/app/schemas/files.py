@@ -44,6 +44,16 @@ class DigitalObjectRead(DigitalObjectCreateResponse):
     # Для дашборда / аналитики по вузам (из профиля владельца и загрузившего)
     uploaded_by_university_id: int | None = None
     owner_university_id: int | None = None
+    trust_chain_status: str | None = None
+    trust_chain_reason: str | None = None
+    trust_chain_tx_hash: str | None = None
+    trust_chain_tx_explorer_url: str | None = None
+    trust_chain_actor_email: str | None = None
+    trust_chain_actor_wallet_address: str | None = None
+    registered_hash: str | None = None
+    current_hash: str | None = None
+    registered_original_available: bool = False
+    registered_original_hash: str | None = None
 
 
 class Metrics(BaseModel):

@@ -570,6 +570,95 @@
   padding-bottom: 16px;
 }
 
+.registry-table--documents {
+  min-width: 1180px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.registry-table--documents th {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 12px 16px 10px;
+  text-align: left;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.registry-table--documents td {
+  padding: 13px 16px;
+  vertical-align: middle;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  line-height: 1.35;
+}
+
+.registry-table--documents tbody tr:first-child td {
+  border-top: 0;
+}
+
+.registry-doc-link--primary {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registry-cell-main {
+  display: inline-block;
+  max-width: 100%;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+a.registry-cell-main {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.registry-cell-sub {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.registry-integrity-note {
+  font-size: 11px;
+}
+
+.registry-status-text {
+  display: inline-block;
+  max-width: 100%;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.registry-tx-link {
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.registry-date-cell {
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
 .empty-state--soft {
   padding: 28px 16px;
   text-align: center;

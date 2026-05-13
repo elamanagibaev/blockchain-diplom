@@ -9,6 +9,7 @@ from app.schemas.department import (
     DepartmentStudentCreateResponse,
     DepartmentStudentGradesRead,
     DepartmentStudentRead,
+    DemoGradeChangeResponse,
     GradeUpdateRequest,
     GradeUpdateResponse,
     StudentGraduateResponse,
@@ -28,6 +29,7 @@ def _student_read(user: User) -> DepartmentStudentRead:
         email=user.email,
         role=user.role,
         university_id=user.university_id,
+        university_name=user.university.name if getattr(user, "university", None) else None,
         enrollment_year=user.enrollment_year,
         major=user.major,
         created_at=user.created_at,
@@ -65,6 +67,7 @@ def list_students_grades(
     current_user: User = Depends(get_current_user),
 ):
     rows = StudentService(db).list_students_with_grades(current_user)
+    service = StudentService(db)
     return [
         DepartmentStudentGradesRead(
             student=_student_read(student),
@@ -86,6 +89,7 @@ def list_students_grades(
                 )
                 for g in grades
             ],
+            **service.diploma_integrity_for_student(current_user, student.id),
         )
         for student, progress, grades in rows
     ]
@@ -116,6 +120,38 @@ def update_grade(
             graduated=progress.graduated,
             created_at=progress.created_at,
         ),
+    )
+
+
+@router.post("/students/{student_id}/grades/{grade_id}/demo-data-change", response_model=DemoGradeChangeResponse)
+def demo_change_grade_after_registration(
+    student_id: UUID,
+    grade_id: UUID,
+    body: GradeUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    grade, integrity = StudentService(db).demo_change_registered_grade(
+        current_user,
+        student_id,
+        grade_id,
+        body.grade,
+    )
+    return DemoGradeChangeResponse(
+        grade=StudentGradeRead(
+            id=grade.id,
+            student_id=grade.student_id,
+            subject=grade.subject,
+            course_year=grade.course_year,
+            grade=grade.grade,
+            locked=grade.locked,
+            created_at=grade.created_at,
+            updated_at=grade.updated_at,
+        ),
+        diploma_id=integrity["diploma_id"],
+        integrity_status=integrity["integrity_status"],
+        registered_hash=integrity["registered_hash"],
+        current_hash=integrity["current_hash"],
     )
 
 

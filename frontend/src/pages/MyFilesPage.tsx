@@ -92,10 +92,11 @@ export const MyFilesPage: React.FC = () => {
             <div className="label">Статус</div>
             <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="FROZEN">Черновик</option>
-              <option value="UNDER_REVIEW">На проверке</option>
-              <option value="APPROVED">Готов к регистрации</option>
-              <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
+              <option value="FROZEN">Сформирован</option>
+              <option value="UNDER_REVIEW">На рассмотрении</option>
+              <option value="DEAN_APPROVED">Подтверждён деканатом</option>
+              <option value="REGISTERED">Записан в блокчейн</option>
+              <option value="ASSIGNED_TO_OWNER">Закреплён за выпускником</option>
               <option value="REJECTED">Отклонён</option>
               <option value="TRANSFERRED">Передан</option>
             </select>

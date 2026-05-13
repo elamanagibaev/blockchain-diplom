@@ -40,6 +40,13 @@ def _tx_view_url(tx_hash: str) -> str:
     return f"/tx/{tx_hash}"
 
 
+def _trust_chain_marker(tx: dict[str, Any] | None) -> bool:
+    if not tx:
+        return False
+    data = (tx.get("input") or tx.get("data") or "").lower()
+    return "54525553545f434841494e5f42524f4b454e".lower() in data
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index() -> str:
     return f"""
@@ -91,6 +98,7 @@ async def tx_json(tx_hash: str) -> JSONResponse:
             "transaction": tx,
             "receipt": receipt,
             "block_timestamp": _fmt_ts(block.get("timestamp") if block else None),
+            "trust_chain_status": "BROKEN" if _trust_chain_marker(tx) else "OK",
         }
     )
 
@@ -126,13 +134,14 @@ async def tx_page(tx_hash: str) -> HTMLResponse:
     to_addr = tx.get("to") or "contract creation"
     timestamp = _fmt_ts(block.get("timestamp") if block else None) or "-"
     data_link = f"/api/tx/{tx_hash}"
+    trust_chain_broken = _trust_chain_marker(tx)
 
     status_label = "Ожидает подтверждения"
     status_bg = "#f1f5f9"
     status_color = "#0f172a"
     status_border = "#cbd5e1"
     if status == "success":
-        status_label = "Подтверждена"
+        status_label = "Записана в блок"
         status_bg = "#ecfdf5"
         status_color = "#166534"
         status_border = "#86efac"
@@ -179,6 +188,7 @@ async def tx_page(tx_hash: str) -> HTMLResponse:
               .actions {{ margin-top: 14px; }}
               .btn-secondary {{ display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 8px; border: 1px solid #93c5fd; color: var(--accent); text-decoration: none; font-weight: 600; background: #eff6ff; }}
               .btn-secondary:hover {{ background: #dbeafe; }}
+              .alert {{ margin: 0 0 16px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; border-radius: 12px; padding: 14px; line-height: 1.45; }}
             </style>
           </head>
           <body>
@@ -186,6 +196,7 @@ async def tx_page(tx_hash: str) -> HTMLResponse:
               <section class="panel">
                 <h1>Детали блокчейн-транзакции</h1>
                 <p class="sub">На этой странице отображаются сведения о транзакции, с помощью которой данные документа были зафиксированы в локальной блокчейн-сети Hardhat.</p>
+                {f'<div class="alert"><b>Цепочка доверия нарушена.</b><br/>Эта транзакция зафиксировала событие изменения данных после регистрации документа. Проверка по блокчейну не пройдена: хэш текущих данных не совпадает с записью в блокчейне.</div>' if trust_chain_broken else ''}
 
                 <div class="grid">
                   <article class="card">

@@ -54,6 +54,8 @@ export function mapBlockchainEventToExplorerRow(api: BlockchainEventApi): ChainE
     extra = `${shortWallet(fromW)} → ${shortWallet(toW)}`;
   } else if (api.action_type === "REGISTER" && toW) {
     extra = `On-chain владелец: ${shortWallet(toW)}`;
+  } else if (api.action_type === "TRUST_CHAIN_BROKEN") {
+    extra = "Проверка по блокчейну не пройдена: данные изменены";
   }
 
   let initiator: ChainExplorerRow["initiator"] = null;

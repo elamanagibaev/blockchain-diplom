@@ -31,6 +31,7 @@ export function getAuditEventLabel(
     case "VERIFY_SUCCESS":
       return "Верификация успешна";
     case "VERIFY_FAILED":
+      if (metadata?.method === "demo_data_change") return "Цепочка доверия нарушена";
       return "Верификация не пройдена";
     default:
       return action || "Событие";
@@ -44,6 +45,8 @@ export function getChainEventLabel(actionType: string): string {
       return "Запись в блокчейн";
     case "TRANSFER":
       return "Передача";
+    case "TRUST_CHAIN_BROKEN":
+      return "Цепочка доверия нарушена";
     default:
       return actionType || "On-chain";
   }
@@ -59,6 +62,7 @@ export function buildAuditExtra(
     case "VERIFY_SUCCESS":
       return "Результат: подлинность подтверждена";
     case "VERIFY_FAILED": {
+      if (metadata.method === "demo_data_change") return "Причина: данные изменены после регистрации";
       const reason = metadata.reason ?? metadata.detail;
       return reason ? `Причина: ${String(reason)}` : "Результат: не пройдена";
     }

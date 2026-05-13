@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Spinner } from "../components/ui/Spinner";
 import { documentListLabel } from "../utils/documentLabels";
+import { getExplorerTxUrlOptional } from "../utils/blockExplorer";
 
 type DocRow = {
   id: string;
@@ -21,6 +22,13 @@ type DocRow = {
   uploaded_by_wallet_address?: string | null;
   last_transfer_from_wallet?: string | null;
   last_transfer_to_wallet?: string | null;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  trust_chain_tx_explorer_url?: string | null;
+  trust_chain_actor_email?: string | null;
+  trust_chain_actor_wallet_address?: string | null;
+  tx_explorer_url?: string | null;
 };
 
 function formatRuDateTimeSeconds(iso: string): string {
@@ -34,19 +42,36 @@ function shortWallet(addr: string | null | undefined): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-type ActionKind = "sale" | "reject" | "review" | "registered";
+function shortHash(hash: string | null | undefined): string {
+  if (!hash) return "—";
+  if (hash.length < 18) return hash;
+  return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
+}
 
-function mapRegistryAction(status: string, blockchainTx: string | null | undefined): { label: string; kind: ActionKind } {
-  if (status === "TRANSFERRED") {
-    return { label: "Продажа", kind: "sale" };
+function documentStatusRu(status: string): string {
+  const map: Record<string, string> = {
+    FROZEN: "Сформирован",
+    UPLOADED: "Сформирован",
+    UNDER_REVIEW: "На согласовании",
+    PENDING_APPROVAL: "На согласовании",
+    APPROVED: "Согласован",
+    DEAN_APPROVED: "Подтверждён деканатом",
+    REGISTERED: "Зарегистрирован",
+    REGISTERED_ON_CHAIN: "Зарегистрирован в блокчейне",
+    ASSIGNED_TO_OWNER: "Закреплён за выпускником",
+    REJECTED: "Отклонён",
+    TRANSFERRED: "Передан",
+  };
+  return map[status] || status;
+}
+
+function registryStatusMatches(row: DocRow, filter: string): boolean {
+  if (!filter) return true;
+  if (filter === "TRANSFERRED") return row.status === "TRANSFERRED";
+  if (filter === "REGISTERED") {
+    return Boolean(row.blockchain_tx_hash) && row.status !== "TRANSFERRED";
   }
-  if (status === "REJECTED") {
-    return { label: "Отклонение", kind: "reject" };
-  }
-  if (blockchainTx || status === "REGISTERED_ON_CHAIN") {
-    return { label: "Зарегистрирован", kind: "registered" };
-  }
-  return { label: "Рассмотрение", kind: "review" };
+  return row.status === filter;
 }
 
 function WalletCell({ address }: { address: string | null | undefined }) {
@@ -60,7 +85,7 @@ function WalletCell({ address }: { address: string | null | undefined }) {
       className="registry-wallet-link"
       style={{
         fontFamily: "ui-monospace, monospace",
-        fontSize: 13,
+        fontSize: 12,
         color: "var(--color-primary)",
         textDecoration: "none",
         borderBottom: "1px dashed rgba(252, 213, 53, 0.35)",
@@ -87,13 +112,14 @@ export const GlobalRegistryPage: React.FC = () => {
     try {
       const params: Record<string, string> = {};
       if (search) params.q = search;
-      if (statusFilter) params.status = statusFilter;
+      if (statusFilter && statusFilter !== "REGISTERED") params.status = statusFilter;
       if (ownerWallet.trim()) params.owner_wallet = ownerWallet.trim();
       if (txHashFilter.trim()) params.tx_hash = txHashFilter.trim();
       params.sort_by = sortBy;
       params.sort_order = sortOrder;
       const res = await api.get<DocRow[]>("/files/global", { params });
-      setItems(res.data);
+      const rows = res.data.filter((row) => registryStatusMatches(row, statusFilter));
+      setItems(rows);
     } catch {
       setItems([]);
     } finally {
@@ -109,7 +135,7 @@ export const GlobalRegistryPage: React.FC = () => {
     <div className="page global-registry-page">
       <PageHeader
         title="Общий реестр"
-        subtitle="Все документы, попавшие в платформу (включая на согласовании)"
+        subtitle="Каталог документов платформы: статус, владелец, blockchain-запись и транзакция"
       />
 
       <div className="card card--subtle registry-filters">
@@ -117,7 +143,7 @@ export const GlobalRegistryPage: React.FC = () => {
           <div>
             <h2 className="ui-card-title">Поиск и фильтры</h2>
             <p className="ui-card-desc" style={{ maxWidth: "none" }}>
-              По клику на кошелёк открывается карточка пользователя, если адрес есть в системе.
+              Реестр показывает документы как каталог. События blockchain остаются в журнале.
             </p>
           </div>
           <button type="button" className="btn btn-muted btn-sm" onClick={() => void load()}>
@@ -156,11 +182,11 @@ export const GlobalRegistryPage: React.FC = () => {
             <div className="label">Статус</div>
             <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Все статусы</option>
-              <option value="UNDER_REVIEW">На рассмотрении</option>
-              <option value="APPROVED">Одобрен (до сети)</option>
-              <option value="REGISTERED_ON_CHAIN">В блокчейне</option>
-              <option value="REJECTED">Отклонён</option>
+              <option value="UNDER_REVIEW">На согласовании</option>
+              <option value="REGISTERED">Зарегистрирован</option>
+              <option value="ASSIGNED_TO_OWNER">Закреплён за выпускником</option>
               <option value="TRANSFERRED">Передан</option>
+              <option value="REJECTED">Отклонён</option>
             </select>
           </div>
           <div style={{ flex: "0 1 200px", minWidth: 0 }}>
@@ -205,43 +231,82 @@ export const GlobalRegistryPage: React.FC = () => {
           </div>
         ) : (
           <div className="ui-table-wrap table-scroll">
-            <table className="w-full registry-table">
+            <table className="w-full registry-table registry-table--documents">
+              <colgroup>
+                <col style={{ width: "28%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "6%" }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>Файл</th>
-                  <th>Загрузил</th>
+                  <th>Документ</th>
                   <th>Владелец</th>
-                  <th>Получатель</th>
-                  <th>Действие</th>
-                  <th>Время</th>
+                  <th>Загрузил</th>
+                  <th>Статус</th>
+                  <th>Блокчейн</th>
+                  <th>Транзакция</th>
+                  <th>Дата</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => {
-                  const action = mapRegistryAction(r.status, r.blockchain_tx_hash);
-                  const recipientWallet = r.last_transfer_to_wallet || null;
                   const docLabel = documentListLabel(r);
+                  const uploaderWallet = r.uploaded_by_wallet_address;
+                  const uploaderLabel = r.uploaded_by_email || shortWallet(uploaderWallet);
+                  const uploaderHref = uploaderWallet
+                    ? `/profile/user?w=${encodeURIComponent(uploaderWallet)}`
+                    : null;
+                  const txHash = r.blockchain_tx_hash || r.trust_chain_tx_hash || "";
+                  const txUrl = r.tx_explorer_url || r.trust_chain_tx_explorer_url || getExplorerTxUrlOptional(txHash);
+                  const dateValue = r.blockchain_registered_at || r.created_at;
                   return (
                     <tr key={r.id}>
                       <td>
-                        <Link to={`/files/${r.id}`} className="registry-doc-link" title={docLabel}>
+                        <Link to={`/files/${r.id}`} className="registry-doc-link registry-doc-link--primary" title={docLabel}>
                           {docLabel}
                         </Link>
                       </td>
                       <td>
-                        <span title={r.uploaded_by_email || r.uploaded_by_wallet_address || "—"}>
-                          {r.uploaded_by_email || shortWallet(r.uploaded_by_wallet_address)}
-                        </span>
+                        <div className="registry-cell-main">{r.owner_email || "—"}</div>
+                        <div className="registry-cell-sub">
+                          <WalletCell address={r.owner_wallet_address} />
+                        </div>
                       </td>
                       <td>
-                        <WalletCell address={r.owner_wallet_address} />
+                        {uploaderHref ? (
+                          <Link className="registry-cell-main" to={uploaderHref} title={uploaderWallet || uploaderLabel}>
+                            {uploaderLabel}
+                          </Link>
+                        ) : (
+                          <span className="registry-cell-main" title={r.uploaded_by_email || "—"}>{uploaderLabel}</span>
+                        )}
                       </td>
-                      <td>{recipientWallet ? <WalletCell address={recipientWallet} /> : <span className="muted">—</span>}</td>
                       <td>
-                        <span className={`soft-badge soft-badge--${action.kind}`}>{action.label}</span>
+                        <span className="registry-status-text">{documentStatusRu(r.status)}</span>
                       </td>
-                      <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                        {formatRuDateTimeSeconds(r.created_at)}
+                      <td>
+                        <div className="registry-cell-main">{r.blockchain_tx_hash ? "Записан" : "Нет записи"}</div>
+                        {r.trust_chain_status === "BROKEN" && (
+                          <div className="registry-cell-sub registry-integrity-note">
+                            (целостность нарушена)
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {txHash ? (
+                          <a className="registry-tx-link" href={txUrl || "#"} target="_blank" rel="noreferrer" title={txHash}>
+                            {shortHash(txHash)}
+                          </a>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td className="registry-date-cell">
+                        {formatRuDateTimeSeconds(dateValue)}
                       </td>
                     </tr>
                   );

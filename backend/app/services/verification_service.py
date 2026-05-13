@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.constants.document_events import DocumentEventAction
 from app.constants.lifecycle import LifecycleStatus, is_ledger_registered_status
 from app.models.digital_object import DigitalObject
+from app.models.document_event import DocumentEvent
 from app.models.user import User
 from app.models.verification_log import VerificationLog
 from app.services.document_event_service import DocumentEventService
@@ -20,6 +21,21 @@ VerifyStatus = Literal["VALID", "INVALID", "NOT_FOUND"]
 
 def _on_chain_authentic(obj: DigitalObject) -> bool:
     return is_ledger_registered_status(obj.status) and bool(obj.blockchain_tx_hash)
+
+
+def _trust_chain_broken(db: Session, obj: DigitalObject) -> bool:
+    rows = (
+        db.query(DocumentEvent)
+        .filter(DocumentEvent.document_id == obj.id, DocumentEvent.action == DocumentEventAction.VERIFY_FAILED.value)
+        .order_by(DocumentEvent.timestamp.desc())
+        .limit(20)
+        .all()
+    )
+    for row in rows:
+        meta = row.event_metadata if isinstance(row.event_metadata, dict) else {}
+        if meta.get("method") == "demo_data_change" and meta.get("integrity_status") == "MISMATCH":
+            return True
+    return False
 
 
 class VerificationService:
@@ -68,11 +84,12 @@ class VerificationService:
             return sha, None, "NOT_FOUND"
 
         if not _on_chain_authentic(obj):
-            DocumentEventService(self.db).record(
+            DocumentEventService(self.db).record_or_update_latest_check(
                 document_id=obj.id,
                 action=DocumentEventAction.VERIFY_FAILED.value,
                 user_id=uid,
                 metadata={
+                    "verification_kind": "last_check",
                     "method": "file_upload",
                     "reason": "not_registered_on_chain",
                     "status": obj.status,
@@ -82,11 +99,15 @@ class VerificationService:
             self.db.commit()
             return sha, obj, "INVALID"
 
-        DocumentEventService(self.db).record(
+        if _trust_chain_broken(self.db, obj):
+            self.db.commit()
+            return sha, obj, "VALID"
+
+        DocumentEventService(self.db).record_or_update_latest_check(
             document_id=obj.id,
             action=DocumentEventAction.VERIFY_SUCCESS.value,
             user_id=uid,
-            metadata={"method": "file_upload", "sha256_hash": sha},
+            metadata={"verification_kind": "last_check", "method": "file_upload", "sha256_hash": sha},
         )
         self.db.commit()
         return sha, obj, "VALID"
@@ -129,11 +150,12 @@ class VerificationService:
             return None, "NOT_FOUND"
 
         if not _on_chain_authentic(obj):
-            DocumentEventService(self.db).record(
+            DocumentEventService(self.db).record_or_update_latest_check(
                 document_id=obj.id,
                 action=DocumentEventAction.VERIFY_FAILED.value,
                 user_id=requested_by_id,
                 metadata={
+                    "verification_kind": "last_check",
                     "method": method,
                     "reason": "not_registered_on_chain",
                     "status": obj.status,
@@ -143,11 +165,15 @@ class VerificationService:
             self.db.commit()
             return obj, "INVALID"
 
-        DocumentEventService(self.db).record(
+        if _trust_chain_broken(self.db, obj):
+            self.db.commit()
+            return obj, "VALID"
+
+        DocumentEventService(self.db).record_or_update_latest_check(
             document_id=obj.id,
             action=DocumentEventAction.VERIFY_SUCCESS.value,
             user_id=requested_by_id,
-            metadata={"method": method, "sha256_hash": sha},
+            metadata={"verification_kind": "last_check", "method": method, "sha256_hash": sha},
         )
         self.db.commit()
         return obj, "VALID"

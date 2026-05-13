@@ -32,9 +32,10 @@ export const LoginPage: React.FC = () => {
       return;
     }
     try {
-      await login(email, password);
+      const loggedIn = await login(email, password);
       addToLoginHistory(email);
-      navigate("/dashboard");
+      const role = loggedIn?.role;
+      navigate(role === "admin" ? "/dashboard" : "/profile");
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { detail?: string } } };
       const msg = typeof ax?.response?.data?.detail === "string" ? ax.response.data.detail : "Ошибка входа.";

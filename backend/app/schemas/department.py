@@ -17,6 +17,7 @@ class DepartmentStudentRead(BaseModel):
     email: str
     role: str
     university_id: int | None
+    university_name: str | None = None
     enrollment_year: int | None
     major: str | None
     created_at: datetime
@@ -48,6 +49,10 @@ class DepartmentStudentGradesRead(BaseModel):
     student: DepartmentStudentRead
     progress: StudentProgressRead
     grades: list[StudentGradeRead]
+    diploma_id: UUID | None = None
+    integrity_status: str | None = None
+    registered_hash: str | None = None
+    current_hash: str | None = None
 
 
 class GradeUpdateRequest(BaseModel):
@@ -57,6 +62,14 @@ class GradeUpdateRequest(BaseModel):
 class GradeUpdateResponse(BaseModel):
     grade: StudentGradeRead
     progress: StudentProgressRead
+
+
+class DemoGradeChangeResponse(BaseModel):
+    grade: StudentGradeRead
+    diploma_id: UUID
+    integrity_status: str
+    registered_hash: str
+    current_hash: str
 
 
 class StudentPromoteResponse(BaseModel):

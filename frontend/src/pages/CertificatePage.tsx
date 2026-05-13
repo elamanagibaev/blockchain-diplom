@@ -23,6 +23,12 @@ type CertData = {
   blockchain_object_id?: string | null;
   status?: string | null;
   integrity_status: string;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  trust_chain_tx_explorer_url?: string | null;
+  registered_hash?: string | null;
+  current_hash?: string | null;
   tx_explorer_url?: string | null;
 };
 
@@ -60,6 +66,12 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
             blockchain_object_id: d.blockchain_object_id,
             status: d.status,
             integrity_status: d.blockchain_tx_hash ? "OK" : "NOT_FOUND",
+            trust_chain_status: d.trust_chain_status,
+            trust_chain_reason: d.trust_chain_reason,
+            trust_chain_tx_hash: d.trust_chain_tx_hash,
+            trust_chain_tx_explorer_url: d.trust_chain_tx_explorer_url,
+            registered_hash: d.registered_hash,
+            current_hash: d.current_hash,
             tx_explorer_url: d.tx_explorer_url ?? null,
           });
         } else {
@@ -168,6 +180,7 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
   const isPublic = mode === "hash";
   const explorerHref = (data.tx_explorer_url || getExplorerTxUrl(data.transaction_hash || "")).trim();
   const canOpenExplorer = Boolean(data.transaction_hash && explorerHref);
+  const trustChainBroken = data.trust_chain_status === "BROKEN" || data.integrity_status === "TRUST_CHAIN_BROKEN";
   return (
     <div className="page certificate-page">
       {isPublic && (
@@ -195,14 +208,23 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
       <div className="certificate-container">
         <div className="certificate-header">
           <div className="certificate-logo">{BRAND_NAME}</div>
-          <div className="certificate-subtitle">Платформа верификации патентных документов</div>
+          <div className="certificate-subtitle">Платформа верификации цифровых документов</div>
           <h1 className="certificate-title">Сертификат подлинности</h1>
         </div>
 
-        <div className="certificate-status-block certificate-status-block--verified">
-          <span className="certificate-status-icon">✓</span>
-          <h2>Целостность подтверждена</h2>
-          <p>Документ найден в реестре, хэш совпадает с записью</p>
+        <div className={`certificate-status-block ${trustChainBroken ? "certificate-status-block--error" : "certificate-status-block--verified"}`}>
+          <span className="certificate-status-icon">{trustChainBroken ? "⚠" : "✓"}</span>
+          <h2>{trustChainBroken ? "Цепочка доверия нарушена" : "Целостность подтверждена"}</h2>
+          <p>
+            {trustChainBroken
+              ? "Текущие данные документа отличаются от версии, зарегистрированной в блокчейне."
+              : "Документ найден в реестре, хэш совпадает с записью"}
+          </p>
+          {trustChainBroken && (
+            <p className="muted">
+              Проверка по блокчейну не пройдена: хэш текущих данных не совпадает с записью в блокчейне.
+            </p>
+          )}
         </div>
 
         <div className="certificate-sections">
@@ -260,6 +282,23 @@ export const CertificatePage: React.FC<CertificatePageProps> = ({ mode: modeProp
                     <>
                       <dt>Дата в сети</dt>
                       <dd>{new Date(data.blockchain_registered_at).toLocaleString("ru-RU")}</dd>
+                    </>
+                  )}
+                  {trustChainBroken && data.trust_chain_tx_hash && (
+                    <>
+                      <dt>Событие нарушения</dt>
+                      <dd>
+                        <code>{data.trust_chain_tx_hash}</code>
+                        <a
+                          href={data.trust_chain_tx_explorer_url || getExplorerTxUrl(data.trust_chain_tx_hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-outline btn-sm"
+                          style={{ marginLeft: 8 }}
+                        >
+                          Открыть
+                        </a>
+                      </dd>
                     </>
                   )}
                 </>

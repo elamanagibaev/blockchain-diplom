@@ -12,6 +12,7 @@ import { BlockchainInfoCard } from "../components/BlockchainInfoCard";
 import { StageTimeline } from "../components/StageTimeline";
 import { notifyDashboardRefresh } from "../lib/dashboardRefresh";
 import { documentDetailLabel } from "../utils/documentLabels";
+import { getExplorerTxUrlOptional } from "../utils/blockExplorer";
 
 type Data = {
   id: string;
@@ -39,6 +40,14 @@ type Data = {
   deanery_approved_at?: string | null;
   ai_check_status?: string;
   student_wallet_address?: string | null;
+  trust_chain_status?: string | null;
+  trust_chain_reason?: string | null;
+  trust_chain_tx_hash?: string | null;
+  trust_chain_tx_explorer_url?: string | null;
+  registered_hash?: string | null;
+  current_hash?: string | null;
+  registered_original_available?: boolean;
+  registered_original_hash?: string | null;
 };
 
 type ApprovalStage = {
@@ -81,6 +90,7 @@ const ACTION_LABELS: Record<string, string> = {
   VERIFY_REQUEST: "Запрос проверки",
   VERIFY_SUCCESS: "Проверка успешна",
   VERIFY_FAILED: "Проверка не пройдена",
+  TRUST_CHAIN_BROKEN: "Цепочка доверия нарушена",
 };
 
 function formatEventAction(action: string, meta: Record<string, unknown> | null): string {
@@ -99,6 +109,9 @@ function formatEventAction(action: string, meta: Record<string, unknown> | null)
     if (step === "on_chain_registered") return "Выполнена on-chain регистрация документа";
     if (decision === "approved") return "Этап согласования подтверждён";
     if (decision === "rejected") return "Этап согласования отклонён";
+  }
+  if (action === "VERIFY_FAILED" && meta?.method === "demo_data_change") {
+    return "Блокчейн-проверка выявила изменение данных";
   }
   return base;
 }
@@ -121,6 +134,7 @@ export const FileDetailPage: React.FC = () => {
   const [assigningStudent, setAssigningStudent] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [openingDoc, setOpeningDoc] = useState(false);
+  const [openingOriginal, setOpeningOriginal] = useState(false);
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null);
@@ -168,6 +182,40 @@ export const FileDetailPage: React.FC = () => {
       notify("error", msg);
     } finally {
       setOpeningDoc(false);
+    }
+  };
+
+  const handleOpenRegisteredOriginal = async () => {
+    if (!id || !data) return;
+    setOpeningOriginal(true);
+    try {
+      const res = await api.get(`/files/${id}/registered-original/download`, { responseType: "blob" });
+      const mime =
+        (typeof res.headers["content-type"] === "string" && res.headers["content-type"]) ||
+        data.mime_type ||
+        "application/pdf";
+      const blob = new Blob([res.data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+      notify("success", "Зарегистрированный оригинал открыт");
+    } catch (err: any) {
+      let msg = "Не удалось открыть зарегистрированный оригинал";
+      const errData = err?.response?.data;
+      if (errData instanceof Blob) {
+        try {
+          const text = await errData.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.detail || msg;
+        } catch {
+          /* ignore */
+        }
+      } else if (typeof errData?.detail === "string") {
+        msg = errData.detail;
+      }
+      notify("error", msg);
+    } finally {
+      setOpeningOriginal(false);
     }
   };
 
@@ -426,6 +474,7 @@ export const FileDetailPage: React.FC = () => {
   }
 
   const onChainRegistered = Boolean(data.blockchain_tx_hash);
+  const trustChainBroken = data.trust_chain_status === "BROKEN";
   const canSubmit =
     canSubmitForRegistration(data.status, onChainRegistered) && user?.role === "department";
   const isOwner = user?.id === data.owner_id || user?.role === "admin";
@@ -654,6 +703,62 @@ export const FileDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {trustChainBroken && (
+        <div
+          className="card"
+          style={{
+            borderColor: "rgba(220, 38, 38, 0.45)",
+            background: "rgba(254, 242, 242, 0.92)",
+            color: "#991b1b",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Цепочка доверия нарушена</h2>
+          <p style={{ marginTop: 6 }}>
+            Текущие данные диплома отличаются от версии, зарегистрированной в блокчейне. Проверка завершилась ошибкой
+            <strong> несовпадения хэшей</strong>.
+          </p>
+          <div className="blockchain-proof-row" style={{ marginTop: 10 }}>
+            <span>В блокчейне</span>
+            <code title={data.registered_hash || ""}>{data.registered_hash || "—"}</code>
+          </div>
+          <div className="blockchain-proof-row" style={{ marginTop: 8 }}>
+            <span>Текущий</span>
+            <code title={data.current_hash || ""}>{data.current_hash || "—"}</code>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ marginTop: 12 }}
+            onClick={() => void handleOpenDocumentInNewTab()}
+            disabled={openingDoc}
+          >
+            {openingDoc ? "…" : "Открыть текущую версию"}
+          </button>
+          {data.trust_chain_tx_hash && (
+            <a
+              href={data.trust_chain_tx_explorer_url || getExplorerTxUrlOptional(data.trust_chain_tx_hash) || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-outline btn-sm"
+              style={{ marginTop: 12, marginLeft: 8 }}
+            >
+              Открыть blockchain-событие нарушения
+            </a>
+          )}
+          {data.registered_original_available && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ marginTop: 12, marginLeft: 8 }}
+              onClick={() => void handleOpenRegisteredOriginal()}
+              disabled={openingOriginal}
+            >
+              {openingOriginal ? "…" : "Открыть зарегистрированный оригинал"}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="card">
         <StageTimeline
           status={data.status}
@@ -683,6 +788,45 @@ export const FileDetailPage: React.FC = () => {
               objectId={data.blockchain_object_id}
               txExplorerUrl={data.tx_explorer_url}
             />
+            {trustChainBroken && data.trust_chain_tx_hash && (
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: "1px solid rgba(148, 163, 184, 0.28)",
+                }}
+              >
+                <div className="label">Событие нарушения целостности</div>
+                <div className="blockchain-proof-row" style={{ marginTop: 8 }}>
+                  <span>Tx hash</span>
+                  <code title={data.trust_chain_tx_hash}>{data.trust_chain_tx_hash}</code>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(data.trust_chain_tx_hash || "");
+                      notify("success", "Хэш транзакции скопирован");
+                    }}
+                  >
+                    Копировать
+                  </button>
+                </div>
+                <a
+                  href={data.trust_chain_tx_explorer_url || getExplorerTxUrlOptional(data.trust_chain_tx_hash) || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-outline btn-sm"
+                  style={{ marginTop: 10, width: "100%" }}
+                >
+                  Открыть событие нарушения в обозревателе
+                </a>
+              </div>
+            )}
+            {trustChainBroken && (
+              <div className="bad" style={{ marginTop: 12 }}>
+                Проверка по блокчейну не пройдена: хэш текущих данных не совпадает с записью в блокчейне.
+              </div>
+            )}
             {data.blockchain_registered_at && (
               <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
                 Зарегистрировано: {new Date(data.blockchain_registered_at).toLocaleString()}

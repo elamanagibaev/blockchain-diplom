@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 from uuid import UUID
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -44,3 +45,37 @@ class DocumentEventService:
             getattr(ev, "id", None),
         )
         return ev
+
+    def record_or_update_latest_check(
+        self,
+        *,
+        document_id: UUID,
+        action: str,
+        user_id: UUID | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> DocumentEvent:
+        """
+        Хранит одну служебную запись последней проверки документа.
+        Это не засоряет журнал десятками одинаковых VERIFY_SUCCESS/VERIFY_FAILED.
+        События с method=demo_data_change не трогает: они являются фактом нарушения цепочки доверия.
+        """
+        existing = (
+            self.db.query(DocumentEvent)
+            .filter(DocumentEvent.document_id == document_id, DocumentEvent.action == action)
+            .order_by(DocumentEvent.timestamp.desc())
+            .all()
+        )
+        for ev in existing:
+            meta = ev.event_metadata if isinstance(ev.event_metadata, dict) else {}
+            if meta.get("verification_kind") == "last_check":
+                ev.user_id = user_id
+                ev.timestamp = datetime.now(timezone.utc)
+                ev.event_metadata = metadata or {}
+                self.db.add(ev)
+                return ev
+        return self.record(
+            document_id=document_id,
+            user_id=user_id,
+            action=action,
+            metadata=metadata or {},
+        )

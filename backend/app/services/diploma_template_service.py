@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from io import BytesIO
 
+from reportlab import rl_config
 from reportlab.graphics.barcode import qr
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
@@ -16,6 +17,8 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from app.models.student_grade import StudentGrade
 from app.models.student_progress import StudentProgress
 from app.models.user import User
+
+rl_config.invariant = 1
 
 
 class DiplomaTemplateService:
@@ -66,12 +69,21 @@ class DiplomaTemplateService:
         d.add(q)
         return d
 
-    def build_diploma_pdf(self, student: User, grades: list[StudentGrade], document_id, verify_url: str, progress: StudentProgress | None = None) -> bytes:
+    def build_diploma_pdf(
+        self,
+        student: User,
+        grades: list[StudentGrade],
+        document_id,
+        verify_url: str,
+        progress: StudentProgress | None = None,
+        generated_at: datetime | None = None,
+    ) -> bytes:
         uni = student.university.name if getattr(student, "university", None) else "Университет"
         full = (student.full_name or "—").strip() or "—"
         major = (student.major or "—").strip() or "—"
         wallet = (student.wallet_address or "—")
-        gyear = str(datetime.now().year)
+        generation_time = generated_at or datetime.now()
+        gyear = str(generation_time.year)
 
         st = getSampleStyleSheet()
         st.add(ParagraphStyle(name="C", parent=st["Normal"], alignment=1, fontName=self.f, fontSize=12, leading=14))
@@ -81,7 +93,7 @@ class DiplomaTemplateService:
         doc=SimpleDocTemplate(buf,pagesize=A4,leftMargin=18*mm,rightMargin=18*mm,topMargin=18*mm,bottomMargin=20*mm)
         story=[]
         story += [Paragraph("РЕСПУБЛИКА КАЗАХСТАН", st["CB"]), Paragraph(uni, st["CB"]), Paragraph('<font size="22"><b>ЭЛЕКТРОННЫЙ ДИПЛОМ БАКАЛАВРА</b></font>', st["C"]), Spacer(1,2.5*mm), Paragraph('<i>документ сформирован автоматической информационной системой</i>', st["C"]), Spacer(1,4*mm), Paragraph("Настоящий диплом подтверждает, что", st["C"]), Paragraph(f'<font size="16"><b>{full}</b></font>', st["C"]), Paragraph("освоил(а) образовательную программу по специальности", st["C"]), Paragraph(f'<font size="16"><b>{major}</b></font>', st["C"]), Spacer(1,4*mm)]
-        meta=[["Университет",uni],["ФИО студента",full],["Email студента",student.email],["Специальность",major],["Форма обучения","очная"],["Период обучения",f"{student.enrollment_year or '—'}-{gyear}"],["Дата формирования",datetime.now().strftime('%d.%m.%Y')],["Идентификатор документа",str(document_id)],["Кошелёк владельца",wallet]]
+        meta=[["Университет",uni],["ФИО студента",full],["Email студента",student.email],["Специальность",major],["Форма обучения","очная"],["Период обучения",f"{student.enrollment_year or '—'}-{gyear}"],["Дата формирования",generation_time.strftime('%d.%m.%Y')],["Идентификатор документа",str(document_id)],["Кошелёк владельца",wallet]]
         mt=Table(meta,colWidths=[68*mm,102*mm])
         mt.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.6,colors.HexColor('#9aa6b2')),('FONTNAME',(0,0),(-1,-1),self.f),('FONTNAME',(0,0),(0,-1),self.fb),('FONTSIZE',(0,0),(-1,-1),10),('WORDWRAP',(1,0),(1,-1),1)]))
         story += [mt, Spacer(1,2*mm), Paragraph(f'<b><font face="{self.fb}">Проверка подлинности</font></b>', st["Normal"])]

@@ -50,6 +50,8 @@ export const ProfilePage: React.FC = () => {
       navigator.clipboard.writeText(data.wallet_address);
     }
   };
+  const canOpenMyDocuments = data.role === "student";
+  const canOpenRegistry = data.role !== "student";
 
   return (
     <div className="page">
@@ -120,14 +122,20 @@ export const ProfilePage: React.FC = () => {
             <div className="metric-card-label">Зарегистрировано в блокчейне</div>
           </div>
         </div>
-        <div className="row" style={{ marginTop: 16, gap: 8 }}>
-          <Link to="/files" className="btn btn-primary btn-sm">
-            Мои патенты / документы
-          </Link>
-          <Link to="/global" className="btn btn-outline btn-sm">
-            Реестр
-          </Link>
-        </div>
+        {(canOpenMyDocuments || canOpenRegistry) && (
+          <div className="row" style={{ marginTop: 16, gap: 8 }}>
+            {canOpenMyDocuments && (
+              <Link to="/files" className="btn btn-primary btn-sm">
+                Мои документы
+              </Link>
+            )}
+            {canOpenRegistry && (
+              <Link to="/global" className="btn btn-outline btn-sm">
+                Реестр
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

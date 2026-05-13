@@ -57,14 +57,21 @@ export const Layout: React.FC = () => {
   }, [location.pathname]);
 
   const navItems = useMemo((): NavItem[] => {
-    const items: NavItem[] = [{ title: "Панель", path: "/dashboard", icon: LayoutDashboard }];
+    const items: NavItem[] = [];
+    if (user?.role === "admin") {
+      items.push({ title: "Панель", path: "/dashboard", icon: LayoutDashboard });
+    }
     if (user?.role === "department") {
       items.push({ title: "Пользователи", path: "/department/users", icon: Users });
       items.push({ title: "Оценки", path: "/department/grades", icon: GraduationCap });
     }
+    if (user?.role === "student") {
+      items.push({ title: "Мои документы", path: "/files", icon: FileText });
+    }
+    if (user?.role !== "student") {
+      items.push({ title: "Реестр", path: "/global", icon: Globe });
+    }
     items.push(
-      { title: "Мои документы", path: "/files", icon: FileText },
-      { title: "Реестр", path: "/global", icon: Globe },
       { title: "Верификация", path: "/verify", icon: ShieldCheck },
       { title: "Профиль", path: "/profile", icon: User }
     );

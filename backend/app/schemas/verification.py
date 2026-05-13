@@ -29,6 +29,10 @@ class FileVerificationResult(BaseModel):
     blockchain_object_id: str | None = None
     status: str | None = None
     integrity_status: str
+    trust_chain_status: str | None = None
+    trust_chain_reason: str | None = None
+    trust_chain_tx_hash: str | None = None
+    trust_chain_tx_explorer_url: str | None = None
     sha256_hash: str | None = None
     sha256_stored: str | None = None
     # Расширение для UI: этапы pipeline и журнал on-chain в БД
@@ -52,9 +56,18 @@ class PublicVerifyDocumentResponse(BaseModel):
     hash_short: str
     verify_url: str
     is_authentic: bool = Field(description="True если REGISTERED_ON_CHAIN и есть tx")
+    trust_chain_status: str | None = None
+    trust_chain_reason: str | None = None
+    trust_chain_tx_hash: str | None = None
+    trust_chain_tx_explorer_url: str | None = None
+    registered_hash: str | None = None
+    current_hash: str | None = None
+    registered_original_available: bool = False
+    registered_original_hash: str | None = None
     tx_hash: str | None = None
     tx_explorer_url: str | None = None
     file_name: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
     file_preview_url: str | None = None
+    registered_original_preview_url: str | None = None
